@@ -1,0 +1,26 @@
+{
+  "da5f21b4-f3b2-47ec-85c3-3deb081798a6": {
+    "file_id": "da5f21b4-f3b2-47ec-85c3-3deb081798a6",
+    "original_filename": "sample_test_cert.pdf",
+    "saved_filename": "da5f21b4-f3b2-47ec-85c3-3deb081798a6.pdf",
+    "content_type": "application/pdf",
+    "size_bytes": 965,
+    "source_type": "pdf_upload",
+    "status": "attested",
+    "file_path": "C:\\Users\\aruna\\Documents\\GitHub\\document-sih\\backend\\uploads\\da5f21b4-f3b2-47ec-85c3-3deb081798a6.pdf",
+    "verdict": "PASS",
+    "confidence": 0.96,
+    "tier": "Silver",
+    "extracted_data": {
+      "raw_text": "B.Tech Degree Certificate\nName: John Doe\nCGPA: 8.95\nRoll No: CS2024101\nYear: 2024\nUniversity: Indian Institute of Technology",
+      "name": "John Doe\nCGPA",
+      "degree": "B.Tech",
+      "cgpa": 8.95,
+      "year": 2024,
+      "roll_number": "CS2024101",
+      "university": null,
+      "company": null
+    },
+    "vc_id": "urn:uuid:bcf8971d-4166-4720-a5cf-2e23ffa90cf6"
+  }
+}

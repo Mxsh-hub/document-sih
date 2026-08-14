@@ -1,0 +1,135 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --card: hsl(0, 0%, 100%);
+    --ring: hsl(150, 100%, 28%);
+    --input: hsl(0, 0%, 100%);
+    --muted: hsl(45, 60%, 90%);
+    --accent: hsl(35, 100%, 52%);
+    --border: hsl(0, 0%, 0%);
+    --radius: 0px;
+    --chart-1: hsl(150, 100%, 28%);
+    --chart-2: hsl(0, 100%, 48%);
+    --chart-3: hsl(35, 100%, 52%);
+    --chart-4: hsl(320, 100%, 60%);
+    --chart-5: hsl(190, 100%, 45%);
+    --popover: hsl(0, 0%, 100%);
+    --primary: hsl(150, 100%, 28%);
+    --sidebar: hsl(150, 100%, 12%);
+    --spacing: 0.25rem;
+    --font-mono: 'Space Mono', monospace;
+    --font-sans: 'Montserrat', sans-serif;
+    --secondary: hsl(0, 100%, 48%);
+    --background: hsl(45, 100%, 98%);
+    --font-serif: 'Lora', serif;
+    --foreground: hsl(150, 60%, 5%);
+    --destructive: hsl(0, 100%, 45%);
+    --shadow-blur: 0px;
+    --shadow-color: hsl(0, 0%, 0%);
+    --sidebar-ring: hsl(35, 100%, 52%);
+    --shadow-spread: 0px;
+    --letter-spacing: 0.02em;
+    --shadow-opacity: 1;
+    --sidebar-accent: hsl(150, 100%, 18%);
+    --sidebar-border: hsl(0, 0%, 0%);
+    --card-foreground: hsl(150, 60%, 5%);
+    --shadow-offset-x: 4px;
+    --shadow-offset-y: 4px;
+    --sidebar-primary: hsl(35, 100%, 52%);
+    --muted-foreground: hsl(45, 30%, 20%);
+    --accent-foreground: hsl(150, 60%, 5%);
+    --popover-foreground: hsl(150, 60%, 5%);
+    --primary-foreground: hsl(0, 0%, 100%);
+    --sidebar-foreground: hsl(0, 0%, 100%);
+    --secondary-foreground: hsl(0, 0%, 100%);
+    --destructive-foreground: hsl(0, 0%, 100%);
+    --sidebar-accent-foreground: hsl(0, 0%, 100%);
+    --sidebar-primary-foreground: hsl(150, 100%, 12%);
+  }
+  
+  .dark {
+    --card: hsl(150, 70%, 8%);
+    --ring: hsl(35, 100%, 58%);
+    --input: hsl(150, 40%, 12%);
+    --muted: hsl(150, 50%, 12%);
+    --accent: hsl(35, 100%, 58%);
+    --border: hsl(45, 100%, 95%);
+    --radius: 0px;
+    --chart-1: hsl(150, 100%, 48%);
+    --chart-2: hsl(0, 100%, 60%);
+    --chart-3: hsl(35, 100%, 58%);
+    --chart-4: hsl(320, 100%, 70%);
+    --chart-5: hsl(190, 100%, 60%);
+    --popover: hsl(150, 70%, 8%);
+    --primary: hsl(150, 100%, 48%);
+    --sidebar: hsl(150, 100%, 2%);
+    --spacing: 0.25rem;
+    --font-mono: 'Space Mono', monospace;
+    --font-sans: 'Montserrat', sans-serif;
+    --secondary: hsl(0, 100%, 60%);
+    --background: hsl(150, 80%, 4%);
+    --font-serif: 'Lora', serif;
+    --foreground: hsl(45, 100%, 95%);
+    --destructive: hsl(0, 100%, 50%);
+    --shadow-blur: 0px;
+    --shadow-color: hsl(45, 100%, 80%);
+    --sidebar-ring: hsl(35, 100%, 58%);
+    --shadow-spread: 0px;
+    --letter-spacing: 0.04em;
+    --shadow-opacity: 1;
+    --sidebar-accent: hsl(150, 50%, 10%);
+    --sidebar-border: hsl(45, 100%, 95%);
+    --card-foreground: hsl(45, 100%, 95%);
+    --shadow-offset-x: 4px;
+    --shadow-offset-y: 4px;
+    --sidebar-primary: hsl(150, 100%, 48%);
+    --muted-foreground: hsl(45, 20%, 75%);
+    --accent-foreground: hsl(150, 100%, 2%);
+    --popover-foreground: hsl(45, 100%, 95%);
+    --primary-foreground: hsl(150, 100%, 2%);
+    --sidebar-foreground: hsl(45, 100%, 95%);
+    --secondary-foreground: hsl(0, 0%, 100%);
+    --destructive-foreground: hsl(0, 0%, 100%);
+    --sidebar-accent-foreground: hsl(45, 100%, 95%);
+    --sidebar-primary-foreground: hsl(150, 100%, 2%);
+  }
+
+  * {
+    @apply border-border;
+  }
+
+  body {
+    @apply bg-background text-foreground font-sans antialiased;
+    letter-spacing: var(--letter-spacing);
+  }
+}
+
+/* Neo-brutalist custom utilities */
+@layer utilities {
+  .neo-box {
+    @apply border-2 border-border bg-card shadow-neo;
+  }
+  
+  .neo-box:hover {
+    @apply translate-x-[2px] translate-y-[2px] shadow-neo-sm transition-all;
+  }
+  
+  .neo-box:active {
+    @apply translate-x-[4px] translate-y-[4px] shadow-none;
+  }
+
+  .neo-button {
+    @apply border-2 border-border bg-primary text-primary-foreground font-bold px-6 py-3 shadow-neo hover:translate-x-[2px] hover:translate-y-[2px] hover:shadow-neo-sm active:translate-x-[4px] active:translate-y-[4px] active:shadow-none transition-all uppercase tracking-wider;
+  }
+  
+  .neo-button-accent {
+    @apply neo-button bg-accent text-accent-foreground;
+  }
+  
+  .neo-input {
+    @apply border-2 border-border bg-input px-4 py-3 focus:outline-none focus:ring-2 focus:ring-ring focus:shadow-neo font-mono;
+  }
+}

@@ -1,0 +1,16 @@
+{
+  "name": "astraverify-blockchain",
+  "version": "1.0.0",
+  "description": "Polygon Hardhat Anchor Smart Contract for AstraVerify",
+  "main": "index.js",
+  "scripts": {
+    "node": "hardhat node",
+    "compile": "hardhat compile",
+    "deploy:local": "hardhat run scripts/deploy.js --network localhost",
+    "test": "hardhat test"
+  },
+  "devDependencies": {
+    "@nomicfoundation/hardhat-toolbox": "^4.0.0",
+    "hardhat": "^2.19.4"
+  }
+}

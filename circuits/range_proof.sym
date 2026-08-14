@@ -1,0 +1,8 @@
+1,1,1,main.valid
+2,2,1,main.threshold
+3,-1,1,main.cgpa
+4,-1,0,main.ge.out
+5,-1,0,main.ge.in[0]
+6,-1,0,main.ge.in[1]
+7,-1,0,main.ge.diff
+8,3,0,main.ge.is_ge

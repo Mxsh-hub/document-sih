@@ -1,0 +1,78 @@
+{
+  "_format": "hh-sol-cache-2",
+  "files": {
+    "C:\\Users\\aruna\\Documents\\GitHub\\document-sih\\blockchain\\contracts\\AstraVerifyAnchor.sol": {
+      "lastModificationDate": 1786713371031,
+      "contentHash": "b1366a0838d9bfcd3330d14f0a161e28",
+      "sourceName": "contracts/AstraVerifyAnchor.sol",
+      "solcConfig": {
+        "version": "0.8.20",
+        "settings": {
+          "optimizer": {
+            "enabled": true,
+            "runs": 200
+          },
+          "evmVersion": "paris",
+          "outputSelection": {
+            "*": {
+              "*": [
+                "abi",
+                "evm.bytecode",
+                "evm.deployedBytecode",
+                "evm.methodIdentifiers",
+                "metadata"
+              ],
+              "": [
+                "ast"
+              ]
+            }
+          }
+        }
+      },
+      "imports": [],
+      "versionPragmas": [
+        "^0.8.19"
+      ],
+      "artifacts": [
+        "AstraVerifyAnchor",
+        "IVerifier"
+      ]
+    },
+    "C:\\Users\\aruna\\Documents\\GitHub\\document-sih\\blockchain\\contracts\\Verifier.sol": {
+      "lastModificationDate": 1786713269412,
+      "contentHash": "d656d3777757a7c802ed5454e66309cf",
+      "sourceName": "contracts/Verifier.sol",
+      "solcConfig": {
+        "version": "0.8.20",
+        "settings": {
+          "optimizer": {
+            "enabled": true,
+            "runs": 200
+          },
+          "evmVersion": "paris",
+          "outputSelection": {
+            "*": {
+              "*": [
+                "abi",
+                "evm.bytecode",
+                "evm.deployedBytecode",
+                "evm.methodIdentifiers",
+                "metadata"
+              ],
+              "": [
+                "ast"
+              ]
+            }
+          }
+        }
+      },
+      "imports": [],
+      "versionPragmas": [
+        ">=0.7.0 <0.9.0"
+      ],
+      "artifacts": [
+        "Groth16Verifier"
+      ]
+    }
+  }
+}
