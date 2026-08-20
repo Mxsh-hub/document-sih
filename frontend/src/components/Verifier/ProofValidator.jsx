@@ -7,7 +7,7 @@ export default function ProofValidator() {
   const [isValidating, setIsValidating] = useState(false);
   const [validationResult, setValidationResult] = useState(null);
 
-  const contractAddress = "0xe7f1725E7734CE288F8367e1Bb143E90bb3F0512";
+  const contractAddress = import.meta.env.VITE_CONTRACT_ADDRESS || "0xe7f1725E7734CE288F8367e1Bb143E90bb3F0512";
   // Minimal ABI for verifyZKProof
   const contractABI = [
     "function verifyZKProof(uint256[2] _pA, uint256[2][2] _pB, uint256[2] _pC, uint256[1] _pubSignals, bytes32 _docHash) external returns (bool)"
@@ -44,9 +44,10 @@ export default function ProofValidator() {
       // 4. Blockchain Verification (ethers)
       if (docHash && ethers) {
         try {
-          // Connect to local Hardhat node
-          const provider = new ethers.JsonRpcProvider("http://127.0.0.1:8545");
-          const signer = await provider.getSigner(0); // Use first account
+          if (!window.ethereum) throw new Error("Please install MetaMask to verify proofs on the live network.");
+          await window.ethereum.request({ method: 'eth_requestAccounts' });
+          const provider = new ethers.BrowserProvider(window.ethereum);
+          const signer = await provider.getSigner();
           
           const contract = new ethers.Contract(contractAddress, contractABI, signer);
           

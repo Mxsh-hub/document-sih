@@ -116,7 +116,7 @@ export default function ZKProofGenerator() {
               </div>
             </div>
 
-            <div className="neo-box bg-secondary text-secondary-foreground p-6 space-y-2">
+            <div className="neo-box !bg-secondary text-secondary-foreground p-6 space-y-2">
                <div className="flex items-center gap-2">
                  <Lock size={24} />
                  <h3 className="font-black uppercase text-xl">Zero-Knowledge Guarantee</h3>

@@ -124,7 +124,7 @@ export default function LandingPage() {
           <div className="neo-box p-8 bg-sidebar text-sidebar-foreground space-y-8 relative overflow-hidden">
              <div className="absolute top-0 left-0 bg-accent text-accent-foreground font-bold px-4 py-1 border-b-2 border-r-2 border-border uppercase">Verifier (Employer)</div>
              <h3 className="text-2xl font-bold uppercase mt-4 text-sidebar-primary">Verifier Check</h3>
-             <p className="font-mono text-sm text-gray-400">The verifier checks if: <strong className="text-white">CGPA &gt;= 7.5</strong></p>
+             <p className="font-mono text-sm text-sidebar-foreground/70">The verifier checks if: <strong>CGPA &gt;= 7.5</strong></p>
              
              <div className="flex-1 flex flex-col items-center justify-center h-48 mt-8">
                 {isDemoValid ? (
@@ -135,7 +135,7 @@ export default function LandingPage() {
                   >
                     <CheckCircle2 size={80} className="mb-4" />
                     <span className="text-2xl font-black uppercase border-b-4 border-green-500">Mathematical Proof: VALID</span>
-                    <p className="mt-4 text-center font-serif text-gray-300">The candidate proved their CGPA is &gt;= 7.5.<br/>(Actual CGPA remains secret).</p>
+                    <p className="mt-4 text-center font-serif text-sidebar-foreground/70">The candidate proved their CGPA is &gt;= 7.5.<br/>(Actual CGPA remains secret).</p>
                   </motion.div>
                 ) : (
                   <motion.div 
@@ -145,7 +145,7 @@ export default function LandingPage() {
                   >
                     <XCircle size={80} className="mb-4" />
                     <span className="text-2xl font-black uppercase border-b-4 border-destructive">Mathematical Proof: INVALID</span>
-                    <p className="mt-4 text-center font-serif text-gray-300">The candidate failed to prove the constraint.<br/>(Actual CGPA remains secret).</p>
+                    <p className="mt-4 text-center font-serif text-sidebar-foreground/70">The candidate failed to prove the constraint.<br/>(Actual CGPA remains secret).</p>
                   </motion.div>
                 )}
              </div>
@@ -159,8 +159,8 @@ export default function LandingPage() {
         
         <div className="flex flex-col md:flex-row items-center justify-center gap-4 md:gap-0 relative">
           
-          <div className="neo-box p-6 bg-card z-10 w-full md:w-1/4 text-center relative group">
-            <div className="h-16 w-16 mx-auto bg-primary text-primary-foreground flex items-center justify-center border-4 border-border shadow-neo mb-4 group-hover:rotate-12 transition-transform">
+          <div className="neo-box p-6 z-10 w-full md:w-1/4 text-center relative group">
+            <div className="h-16 w-16 mx-auto !bg-primary text-primary-foreground flex items-center justify-center border-4 border-border shadow-neo mb-4 group-hover:rotate-12 transition-transform">
               <Building2 size={32} />
             </div>
             <h3 className="font-black uppercase mb-2">1. Ingest</h3>
@@ -169,8 +169,8 @@ export default function LandingPage() {
 
           <ArrowRight className="hidden md:block text-primary mx-4 shrink-0" size={40} />
           
-          <div className="neo-box p-6 bg-card z-10 w-full md:w-1/4 text-center relative group">
-            <div className="h-16 w-16 mx-auto bg-secondary text-secondary-foreground flex items-center justify-center border-4 border-border shadow-neo mb-4 group-hover:rotate-12 transition-transform">
+          <div className="neo-box p-6 z-10 w-full md:w-1/4 text-center relative group">
+            <div className="h-16 w-16 mx-auto !bg-secondary text-secondary-foreground flex items-center justify-center border-4 border-border shadow-neo mb-4 group-hover:rotate-12 transition-transform">
               <BrainCircuit size={32} />
             </div>
             <h3 className="font-black uppercase mb-2">2. AI Swarm</h3>
@@ -179,8 +179,8 @@ export default function LandingPage() {
 
           <ArrowRight className="hidden md:block text-primary mx-4 shrink-0" size={40} />
 
-          <div className="neo-box p-6 bg-card z-10 w-full md:w-1/4 text-center relative group">
-            <div className="h-16 w-16 mx-auto bg-accent text-accent-foreground flex items-center justify-center border-4 border-border shadow-neo mb-4 group-hover:rotate-12 transition-transform">
+          <div className="neo-box p-6 z-10 w-full md:w-1/4 text-center relative group">
+            <div className="h-16 w-16 mx-auto !bg-accent text-accent-foreground flex items-center justify-center border-4 border-border shadow-neo mb-4 group-hover:rotate-12 transition-transform">
               <Lock size={32} />
             </div>
             <h3 className="font-black uppercase mb-2">3. Wallet ZKP</h3>
@@ -189,25 +189,25 @@ export default function LandingPage() {
 
           <ArrowRight className="hidden md:block text-primary mx-4 shrink-0" size={40} />
 
-          <div className="neo-box p-6 bg-sidebar text-sidebar-foreground z-10 w-full md:w-1/4 text-center relative group">
-            <div className="h-16 w-16 mx-auto bg-primary text-primary-foreground flex items-center justify-center border-4 border-border shadow-neo mb-4 group-hover:rotate-12 transition-transform">
+          <div className="neo-box !bg-sidebar text-sidebar-foreground p-6 z-10 w-full md:w-1/4 text-center relative group">
+            <div className="h-16 w-16 mx-auto !bg-primary text-primary-foreground flex items-center justify-center border-4 border-border shadow-neo mb-4 group-hover:rotate-12 transition-transform">
               <Shield size={32} />
             </div>
             <h3 className="font-black uppercase mb-2 text-sidebar-primary">4. Polygon</h3>
-            <p className="font-serif text-sm text-gray-300">Verifiers mathematically validate and check anchor hash.</p>
+            <p className="font-serif text-sm text-sidebar-foreground/80">Verifiers mathematically validate and check anchor hash.</p>
           </div>
 
         </div>
       </section>
 
       {/* Tiered Trust Banner */}
-      <section className="neo-box bg-primary text-primary-foreground p-8 md:p-12 transform -rotate-1 hover:rotate-0 transition-transform">
+      <section className="neo-box !bg-primary text-primary-foreground p-8 md:p-12 transform -rotate-1 hover:rotate-0 transition-transform">
         <div className="flex flex-col md:flex-row justify-between items-center gap-8">
            <div className="space-y-4 max-w-3xl">
              <h2 className="text-3xl md:text-5xl font-black uppercase">Tiered Trust Model</h2>
              <p className="font-mono text-xl">Not all documents are equal. AstraVerify classifies credentials into Gold, Silver, and Bronze tiers based on cryptographic origin and AI verification rigor.</p>
            </div>
-           <Link to="/issuer" className="neo-button bg-card text-foreground hover:bg-card/90 whitespace-nowrap text-xl">
+           <Link to="/issuer" className="neo-button !bg-card !text-foreground hover:bg-card/90 whitespace-nowrap text-xl">
              Issuer Portal <ArrowRight className="inline ml-2" />
            </Link>
         </div>

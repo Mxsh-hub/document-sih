@@ -21,7 +21,7 @@ export default function IssuerPortal() {
   const [isIssuing, setIsIssuing] = useState(false);
   const [issueResult, setIssueResult] = useState(null);
 
-  const contractAddress = "0xe7f1725E7734CE288F8367e1Bb143E90bb3F0512";
+  const contractAddress = import.meta.env.VITE_CONTRACT_ADDRESS || "0xe7f1725E7734CE288F8367e1Bb143E90bb3F0512";
   const contractABI = [
     "function anchorDocument(bytes32 _docHash, string calldata _tier) external",
     "event DocumentAnchored(bytes32 indexed docHash, address indexed issuer, string tier, uint256 timestamp)"
@@ -55,14 +55,22 @@ export default function IssuerPortal() {
       let txHash = "Pending...";
       
       // 2. Anchor on Blockchain (Ethers.js)
-      if (ethers) {
-        const provider = new ethers.JsonRpcProvider("http://127.0.0.1:8545");
-        const signer = await provider.getSigner(0); // Default local account
+      try {
+        if (!window.ethereum) throw new Error("Please install MetaMask to issue credentials on the live network.");
+        await window.ethereum.request({ method: 'eth_requestAccounts' });
+        const provider = new ethers.BrowserProvider(window.ethereum);
+        const signer = await provider.getSigner();
         const contract = new ethers.Contract(contractAddress, contractABI, signer);
         
-        const tx = await contract.anchorDocument(docHash, "Gold");
+        const tx = await contract.anchorDocument(docHash, "Gold", {
+            maxPriorityFeePerGas: ethers.parseUnits('40', 'gwei'),
+            maxFeePerGas: ethers.parseUnits('50', 'gwei')
+        });
         await tx.wait();
         txHash = tx.hash;
+      } catch (blockchainErr) {
+        console.error("Blockchain anchoring failed:", blockchainErr);
+        throw new Error("Blockchain anchoring failed: " + blockchainErr.message);
       }
 
       setIssueResult({
