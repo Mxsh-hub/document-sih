@@ -1,0 +1,239 @@
+{
+  "generated_at": "2026-10-23T18:09:55.671585+00:00",
+  "dataset": "synthetic, generated in-memory by this script",
+  "disclaimer": "Metrics describe only the synthetic evaluation corpus. They are not AICTE accuracy claims and must not be presented as evidence of real-world performance.",
+  "ocr_field_extraction": {
+    "documents": 20,
+    "fields_total": 100,
+    "fields_correct": 100,
+    "field_exact_match_accuracy": 1.0,
+    "processing_time_ms": {
+      "samples": 20,
+      "median": 43.94,
+      "p95": 47.66,
+      "max": 73.15
+    },
+    "per_document": [
+      {
+        "document": 0,
+        "fields_expected": 5,
+        "fields_correct": 5
+      },
+      {
+        "document": 1,
+        "fields_expected": 5,
+        "fields_correct": 5
+      },
+      {
+        "document": 2,
+        "fields_expected": 5,
+        "fields_correct": 5
+      },
+      {
+        "document": 3,
+        "fields_expected": 5,
+        "fields_correct": 5
+      },
+      {
+        "document": 4,
+        "fields_expected": 5,
+        "fields_correct": 5
+      },
+      {
+        "document": 5,
+        "fields_expected": 5,
+        "fields_correct": 5
+      },
+      {
+        "document": 6,
+        "fields_expected": 5,
+        "fields_correct": 5
+      },
+      {
+        "document": 7,
+        "fields_expected": 5,
+        "fields_correct": 5
+      },
+      {
+        "document": 8,
+        "fields_expected": 5,
+        "fields_correct": 5
+      },
+      {
+        "document": 9,
+        "fields_expected": 5,
+        "fields_correct": 5
+      },
+      {
+        "document": 10,
+        "fields_expected": 5,
+        "fields_correct": 5
+      },
+      {
+        "document": 11,
+        "fields_expected": 5,
+        "fields_correct": 5
+      },
+      {
+        "document": 12,
+        "fields_expected": 5,
+        "fields_correct": 5
+      },
+      {
+        "document": 13,
+        "fields_expected": 5,
+        "fields_correct": 5
+      },
+      {
+        "document": 14,
+        "fields_expected": 5,
+        "fields_correct": 5
+      },
+      {
+        "document": 15,
+        "fields_expected": 5,
+        "fields_correct": 5
+      },
+      {
+        "document": 16,
+        "fields_expected": 5,
+        "fields_correct": 5
+      },
+      {
+        "document": 17,
+        "fields_expected": 5,
+        "fields_correct": 5
+      },
+      {
+        "document": 18,
+        "fields_expected": 5,
+        "fields_correct": 5
+      },
+      {
+        "document": 19,
+        "fields_expected": 5,
+        "fields_correct": 5
+      }
+    ]
+  },
+  "rule_validation": {
+    "cases": 3,
+    "labels_total": 27,
+    "labels_correct": 27,
+    "rule_outcome_accuracy": 1.0,
+    "details": [
+      {
+        "case": "valid",
+        "application_id": "1f0ea72e-22b8-4d4b-9e3c-adbb1d7ca214",
+        "outcomes": {
+          "CHECKLIST_REQUIRED": "PASS",
+          "DOCUMENT_TEXT_EXTRACTED": "PASS",
+          "AFFILIATION_VALIDITY": "PASS",
+          "INSTITUTION_NAME_CONSISTENCY": "PASS",
+          "PREVIOUS_APPROVAL_STATUS": "PASS",
+          "TER_PAYMENT_STATUS": "PASS",
+          "ACCREDITATION_VALIDITY": "PASS",
+          "OPEN_DEFICIENCIES": "PASS",
+          "FACULTY_APPROVED_MINIMUM": "PASS"
+        },
+        "expected_overrides": {},
+        "rules_correct": 9,
+        "rules_total": 9
+      },
+      {
+        "case": "expired_affiliation",
+        "application_id": "c4006e99-be82-44b3-9146-8d731e686b48",
+        "outcomes": {
+          "CHECKLIST_REQUIRED": "PASS",
+          "DOCUMENT_TEXT_EXTRACTED": "PASS",
+          "AFFILIATION_VALIDITY": "FAIL",
+          "INSTITUTION_NAME_CONSISTENCY": "PASS",
+          "PREVIOUS_APPROVAL_STATUS": "PASS",
+          "TER_PAYMENT_STATUS": "PASS",
+          "ACCREDITATION_VALIDITY": "PASS",
+          "OPEN_DEFICIENCIES": "PASS",
+          "FACULTY_APPROVED_MINIMUM": "PASS"
+        },
+        "expected_overrides": {
+          "AFFILIATION_VALIDITY": "FAIL"
+        },
+        "rules_correct": 9,
+        "rules_total": 9
+      },
+      {
+        "case": "institution_name_mismatch",
+        "application_id": "d034669e-c20e-493e-a836-6ae7ebdb718c",
+        "outcomes": {
+          "CHECKLIST_REQUIRED": "PASS",
+          "DOCUMENT_TEXT_EXTRACTED": "PASS",
+          "AFFILIATION_VALIDITY": "PASS",
+          "INSTITUTION_NAME_CONSISTENCY": "FAIL",
+          "PREVIOUS_APPROVAL_STATUS": "PASS",
+          "TER_PAYMENT_STATUS": "PASS",
+          "ACCREDITATION_VALIDITY": "PASS",
+          "OPEN_DEFICIENCIES": "PASS",
+          "FACULTY_APPROVED_MINIMUM": "PASS"
+        },
+        "expected_overrides": {
+          "INSTITUTION_NAME_CONSISTENCY": "FAIL"
+        },
+        "rules_correct": 9,
+        "rules_total": 9
+      }
+    ]
+  },
+  "anomaly_heuristics": {
+    "applications": 3,
+    "true_positive": 3,
+    "false_positive": 0,
+    "false_negative": 0,
+    "precision": 1.0,
+    "recall": 1.0,
+    "details": [
+      {
+        "application_id": "9acecbad-5700-401d-a8ab-c2c2f444fcba",
+        "expected": [],
+        "actual": [],
+        "advisory_flags": true
+      },
+      {
+        "application_id": "1f5c67f1-130b-41ac-a241-d51d5f8c5cbe",
+        "expected": [
+          "CROSS_APPLICATION_FILE_REUSE",
+          "SHARED_REFERENCE_IDENTIFIER"
+        ],
+        "actual": [
+          "CROSS_APPLICATION_FILE_REUSE",
+          "SHARED_REFERENCE_IDENTIFIER"
+        ],
+        "advisory_flags": true
+      },
+      {
+        "application_id": "7033f2d3-f563-4b2e-b49a-600aba42b650",
+        "expected": [
+          "PDF_EDITING_TOOL_METADATA"
+        ],
+        "actual": [
+          "PDF_EDITING_TOOL_METADATA"
+        ],
+        "advisory_flags": true
+      }
+    ]
+  },
+  "issuer_verification": {
+    "scenarios": 3,
+    "scenarios_correct": 3,
+    "outcomes": {
+      "signed_demo_credential": "VERIFIED",
+      "bound_to_other_document": "MISMATCH",
+      "external_source": "SOURCE_UNAVAILABLE"
+    },
+    "expected": {
+      "signed_demo_credential": "VERIFIED",
+      "bound_to_other_document": "MISMATCH",
+      "external_source": "SOURCE_UNAVAILABLE"
+    },
+    "all_simulated_sources_labelled": true
+  },
+  "total_runtime_seconds": 3.44
+}

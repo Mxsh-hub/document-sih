@@ -1,0 +1,197 @@
+from enum import StrEnum
+
+
+class Role(StrEnum):
+    APPLICANT = "APPLICANT"
+    REVIEWER = "REVIEWER"
+    APPROVER = "APPROVER"
+    ADMIN = "ADMIN"
+    AUDITOR = "AUDITOR"
+
+
+class ApplicationStatus(StrEnum):
+    DRAFT = "DRAFT"
+    SUBMITTED = "SUBMITTED"
+    UNDER_REVIEW = "UNDER_REVIEW"
+    RECTIFICATION_REQUESTED = "RECTIFICATION_REQUESTED"
+    RESUBMITTED = "RESUBMITTED"
+    APPROVED = "APPROVED"
+    REJECTED = "REJECTED"
+    WITHDRAWN = "WITHDRAWN"
+
+
+class ChecklistItemStatus(StrEnum):
+    PENDING = "PENDING"
+    SATISFIED = "SATISFIED"
+    WAIVED = "WAIVED"
+    REJECTED = "REJECTED"
+
+
+class ChecklistTemplateStatus(StrEnum):
+    DRAFT = "DRAFT"
+    ACTIVE = "ACTIVE"
+    RETIRED = "RETIRED"
+
+
+class DocumentStatus(StrEnum):
+    UPLOADED = "UPLOADED"
+    STORED = "STORED"
+    PROCESSING = "PROCESSING"
+    PROCESSED = "PROCESSED"
+    FAILED = "FAILED"
+    QUARANTINED = "QUARANTINED"
+
+
+class DocumentType(StrEnum):
+    AFFILIATION_CERTIFICATE = "AFFILIATION_CERTIFICATE"
+    LAND_LEASE_DOCUMENT = "LAND_LEASE_DOCUMENT"
+    FACULTY_DEGREE_CERTIFICATE = "FACULTY_DEGREE_CERTIFICATE"
+    INSTITUTIONAL_UNDERTAKING = "INSTITUTIONAL_UNDERTAKING"
+    OTHER = "OTHER"
+
+
+class RecordType(StrEnum):
+    APPROVALS = "approvals"
+    PROGRAMMES = "programmes"
+    FACULTY = "faculty"
+    DEFICIENCIES = "deficiencies"
+    TER = "ter"
+    ACCREDITATIONS = "accreditations"
+    NOCS = "nocs"
+
+
+class ExtractionStatus(StrEnum):
+    PENDING = "PENDING"
+    COMPLETED = "COMPLETED"
+    LOW_CONFIDENCE = "LOW_CONFIDENCE"
+    UNREADABLE = "UNREADABLE"
+    FAILED = "FAILED"
+
+
+class RuleSetStatus(StrEnum):
+    DRAFT = "DRAFT"
+    ACTIVE = "ACTIVE"
+    ARCHIVED = "ARCHIVED"
+
+
+class RuleType(StrEnum):
+    CHECKLIST_COMPLETENESS = "CHECKLIST_COMPLETENESS"
+    DOCUMENT_EXTRACTION = "DOCUMENT_EXTRACTION"
+    DATE_VALIDITY = "DATE_VALIDITY"
+    FIELD_CONSISTENCY = "FIELD_CONSISTENCY"
+    INSTITUTION_RECORD = "INSTITUTION_RECORD"
+    DOCUMENT_TYPE = "DOCUMENT_TYPE"
+
+
+class RuleSeverity(StrEnum):
+    BLOCKING = "BLOCKING"
+    ADVISORY = "ADVISORY"
+    INFO = "INFO"
+
+
+class RuleOutcome(StrEnum):
+    PASS = "PASS"
+    FAIL = "FAIL"
+    INCONCLUSIVE = "INCONCLUSIVE"
+    NOT_AVAILABLE = "NOT_AVAILABLE"
+    NOT_APPLICABLE = "NOT_APPLICABLE"
+
+
+class ValidationStatus(StrEnum):
+    PENDING = "PENDING"
+    RUNNING = "RUNNING"
+    COMPLETED = "COMPLETED"
+    FAILED = "FAILED"
+
+
+class CredentialStatus(StrEnum):
+    ACTIVE = "ACTIVE"
+    REVOKED = "REVOKED"
+    EXPIRED = "EXPIRED"
+
+
+class IssuerVerificationStatus(StrEnum):
+    VERIFIED = "VERIFIED"
+    MISMATCH = "MISMATCH"
+    NOT_FOUND = "NOT_FOUND"
+    SOURCE_UNAVAILABLE = "SOURCE_UNAVAILABLE"
+    ERROR = "ERROR"
+
+
+class AnomalySeverity(StrEnum):
+    LOW = "LOW"
+    MEDIUM = "MEDIUM"
+    HIGH = "HIGH"
+
+
+class InfrastructureEvidenceType(StrEnum):
+    PHOTO = "PHOTO"
+    VIDEO = "VIDEO"
+    FLOOR_PLAN = "FLOOR_PLAN"
+    CERTIFICATE = "CERTIFICATE"
+
+
+class InfrastructureCheckStatus(StrEnum):
+    PRESENT = "PRESENT"
+    MISSING = "MISSING"
+    NEEDS_REVIEW = "NEEDS_REVIEW"
+
+
+class ReviewActionType(StrEnum):
+    ASSIGN = "ASSIGN"
+    NOTE = "NOTE"
+    REQUEST_RECTIFICATION = "REQUEST_RECTIFICATION"
+    ESCALATE = "ESCALATE"
+
+
+class DecisionType(StrEnum):
+    APPROVE = "APPROVE"
+    REJECT = "REJECT"
+
+
+class AlertType(StrEnum):
+    VALIDATION_FAILURE = "VALIDATION_FAILURE"
+    EXPIRED_DOCUMENT = "EXPIRED_DOCUMENT"
+    PENDING_VERIFICATION = "PENDING_VERIFICATION"
+    UNRESOLVED_DISCREPANCY = "UNRESOLVED_DISCREPANCY"
+    RECTIFICATION_REQUEST = "RECTIFICATION_REQUEST"
+    ESCALATION = "ESCALATION"
+
+
+class AlertStatus(StrEnum):
+    OPEN = "OPEN"
+    ACKNOWLEDGED = "ACKNOWLEDGED"
+    RESOLVED = "RESOLVED"
+
+
+class AuditActorType(StrEnum):
+    USER = "USER"
+    SYSTEM = "SYSTEM"
+
+
+class ZkProofStatus(StrEnum):
+    PENDING = "PENDING"
+    VERIFIED = "VERIFIED"
+    REJECTED = "REJECTED"
+    EXPIRED = "EXPIRED"
+
+
+class ZkChainStatus(StrEnum):
+    NOT_REQUESTED = "NOT_REQUESTED"
+    PENDING = "PENDING"
+    ANCHORED = "ANCHORED"
+    FAILED = "FAILED"
+
+
+class ZkProofStatus(StrEnum):
+    PENDING = "PENDING"
+    VERIFIED = "VERIFIED"
+    REJECTED = "REJECTED"
+    EXPIRED = "EXPIRED"
+
+
+class ZkChainStatus(StrEnum):
+    NOT_REQUESTED = "NOT_REQUESTED"
+    PENDING = "PENDING"
+    ANCHORED = "ANCHORED"
+    FAILED = "FAILED"
