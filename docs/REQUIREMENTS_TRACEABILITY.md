@@ -1,7 +1,7 @@
 # Requirements Traceability — AstraVerify / AICTE Adaptation
 
 **Date:** 2026-10-25
-**Version:** 3.1 (post-implementation; adds structured declaration and three-way consistency)
+**Version:** 3.2 (post-MVP milestones M0–M6 recorded; legacy issuer portal demo path documented)
 **Sources:**
 1. Official SIH problem statement — *AI-Powered Application Validation, Document Authentication and Regulatory Compliance Verification* (supplied 2026-10-23).
 2. `IMPLEMENTATION_ROADMAP.md`.
@@ -25,6 +25,8 @@
 | Cross-cutting (X1–X23) | 23 | 21 | 1 | 1 |
 | Post-MVP additions (M4–M6) | 3 | 3 | 0 | 0 |
 | **Total** | **113** | **96** | **15** | **2** |
+
+Milestones `M0`–`M3` and `M7` (§8.1) are not separate IDs: each hardens a requirement listed in the matrix, so it is counted once under that requirement rather than again here.
 
 No official requirement is met through real AICTE integration. Working items are prototype capabilities proven against synthetic data, local PostgreSQL, local storage, a local Hardhat chain, and an automated pytest/contract suite.
 
@@ -87,7 +89,7 @@ No official requirement is met through real AICTE integration. Working items are
 | R11 | Retain page, confidence, source evidence | WORKING | Page/bbox/page dimensions/confidence per evidence item; `/compliance` renders the source page with the box drawn |
 | R12 | Handle unreadable/missing/low confidence | WORKING | `UNREADABLE`, `LOW_CONFIDENCE`, `FAILED`, `OCR_ENGINE_UNAVAILABLE`; review visibility |
 | R13 | Store document hashes and secure originals | WORKING | SHA-256 at intake; immutable versions; signed local downloads |
-| R14 | Measure extraction performance | WORKING | Synthetic harness: 100/100 fields, median 43.94 ms, p95 47.66 ms |
+| R14 | Measure extraction performance | WORKING | Synthetic harness: 100/100 fields, median 104.21 ms, p95 128.18 ms |
 
 ---
 
@@ -155,13 +157,20 @@ No official requirement is met through real AICTE integration. Working items are
 | R43 | Historical explainability against rule versions | WORKING | Immutable rule sets + validation run references |
 | R44 | Human control of final decisions | WORKING | Approver/admin-only decision endpoint; advisory system |
 
-### 8.1 Post-MVP additions
+### 8.1 Post-MVP milestones
 
-| ID | Requirement | Status | Evidence |
-|---|---|---|---|
-| M4 | Advisory report export and alert dispositions | WORKING | `GET /applications/{id}/report?format=json|markdown|html` (`application-report-1.0`, every export audited as `application.report_exported`); dispositions stored in `alerts.payload`; stale alerts auto-superseded; `/compliance` export buttons and alert panel. No PDF/signature/presigned artefact; the report is never an AICTE decision. |
-| M5 | Read-only pre-submission self-check | WORKING | `GET /applications/{id}/self-check` (`self-check-1.0`) for `DRAFT`/`RECTIFICATION_REQUESTED`; blocking parity with `missing_required_items`, no writes; `/compliance` self-check panel. Advisory preview only: it does not run the rule engine and does not predict approval. |
-| M6 | Demo hardening and evaluation | WORKING | `backend/scripts/demo_smoke.py` (live-HTTP walkthrough), `docs/DEMO_RUNBOOK.md` (script + safe phrasing + troubleshooting), advisory-controls section in `evaluation/run_evaluation.py` (39 checks incl. gate parity, report claim safety, disposition gating, supersede), dependency pins reconciled for Python 3.10. Still no browser automation or CI. |
+Milestones are deliverables layered on the phase work, not extra requirement IDs. `M4`–`M6` are counted separately in §1; `M0`–`M3` and `M7` harden requirements already in the matrix and are tracked there.
+
+| ID | Milestone | Status | Evidence | Tracked as |
+|---|---|---|---|---|
+| M0 | Credibility containment | WORKING | Advisory wording and explicit simulated/unavailable labels across API, UI, and docs; the evaluation harness scans every exported report format for claim-shaped phrases; tests assert that no finding, score, hash match, or proof is described as forgery, authenticity, or compliance | X8, X22 |
+| M1 | Evidence viewer | WORKING | `extracted_fields` stores `page`, `bbox`, `page_width`, `page_height`; validation copies them into `finding_evidence.metadata_json`; `/compliance` renders the cited page with the box drawn (pdf.js for PDFs, raster for OCR output) | R11 |
+| M2 | Structured declaration and three-way consistency | WORKING | `application_declarations`; `GET`/`PUT /applications/{id}/declaration`; `AFFILIATION_DECLARATION_MATCH`, `PROGRAMME_DECLARATION_MATCH`, `FACULTY_COUNT_DECLARATION_MATCH`; 12/12 consistency labels in the evaluation harness | R53–R56 |
+| M3 | Advisory QR and PDF-signature inspection | PARTIAL | Local QR decoding (OpenCV, ≤10 pages at 150 dpi) and structural PDF signature/`ByteRange` inspection, recorded in `issuer_verifications` via `POST /document-versions/{id}/technical-verifications`; payloads are never fetched, and CMS, certificates, revocation, and the trust chain are never verified | R26 |
+| M4 | Advisory report export and alert dispositions | WORKING | `GET /applications/{id}/report?format={json,markdown,html}` (`application-report-1.0`, every export audited as `application.report_exported`); dispositions stored in `alerts.payload`; stale alerts auto-superseded; `/compliance` export buttons and alert panel. No PDF/signature/presigned artefact; the report is never an AICTE decision. | §1 (counted) |
+| M5 | Read-only pre-submission self-check | WORKING | `GET /applications/{id}/self-check` (`self-check-1.0`) for `DRAFT`/`RECTIFICATION_REQUESTED`; blocking parity with `missing_required_items`, no writes; `/compliance` self-check panel. Advisory preview only: it does not run the rule engine and does not predict approval. | §1 (counted) |
+| M6 | Demo hardening and evaluation | WORKING | `backend/scripts/demo_smoke.py` (live-HTTP walkthrough, 44 steps), `docs/DEMO_RUNBOOK.md` (script + safe phrasing + troubleshooting), advisory-controls section in `evaluation/run_evaluation.py` (39 checks incl. gate parity, report claim safety, disposition gating, supersede), dependency pins reconciled for Python 3.10. Still no browser automation or CI. | §1 (counted) |
+| M7 | Legacy issuer portal demo path | WORKING | Legacy routers opt-in via `LEGACY_API_ENABLED=true`; `docs/DEMO_RUNBOOK.md` §4 documents the deterministic Hardhat deploy order (`deploy.js` then `deploy_v2.js`), the resulting addresses, the `frontend/.env` values, and the MetaMask account/network requirement; the frontend ABI matches the legacy permissionless `AstraVerifyAnchor.anchorDocument(bytes32,string)`; `tests/conftest.py` pins the flag to `false` so a developer `.env` cannot change test outcomes | §11 |
 
 ---
 
@@ -225,10 +234,10 @@ These remain in the repository for historical reasons and **must not be presente
 | `Wallet/ImportOptions.jsx`, `digilocker.py` | Simulated upload/DigiLocker; proofs are `AstraSimulatedProof` placeholders | Legacy routes only; labelled simulations |
 | `attestation.py` | Real Ed25519 over the canonical payload, honestly typed `AstraEd25519Signature`; demo key derived from config, not a published DID, not W3C Data Integrity | Not used by new issuer flow; covered by `test_legacy_attestation.py` |
 | `routers/issuer.py` | HMAC-SHA256 integrity tag, typed `AstraDemoHmacIntegrity` | Legacy route only; not a signature |
-| Legacy wallet routers (`upload`, `digilocker`, `issuer`, `verify`, `verifier`) | Unmounted unless `LEGACY_API_ENABLED=true` | Off by default |
+| Legacy wallet routers (`upload`, `digilocker`, `issuer`, `verify`, `verifier`) | Unmounted unless `LEGACY_API_ENABLED=true` | Off by default. When enabled for a local demo, `/issuer` is unauthenticated, keeps credentials in an in-memory dict (lost on restart), and anchors to the local Hardhat chain only — see `docs/DEMO_RUNBOOK.md` §4 |
 | legacy `validate-zk` | Does not verify proofs | Not used by new flow |
 | `circuits/range_proof.circom` | Unsound | Disabled; `ZKP_ALLOW_LEGACY_CIRCUIT=false` |
-| `AstraVerifyAnchor.sol` | Legacy contract | V2 contract is used for new anchoring |
+| `AstraVerifyAnchor.sol` | Legacy contract; permissionless `anchorDocument` and `verifyZKProof`, no access control | V2 contract is used for new anchoring; the legacy contract is only used by the legacy `/issuer` and `/verifier` demo pages |
 
 ---
 
@@ -243,6 +252,7 @@ These remain in the repository for historical reasons and **must not be presente
 7. **No CI/browser E2E.** Backend, contract, build, and one live anchor flow were run manually; `/compliance` was build-verified but not browser-automated.
 8. **Synthetic metrics only.** Any measured performance describes the generated corpus and must be labelled as such.
 9. **Declarations are unverified input.** The structured declaration (R53–R56) is applicant-supplied. Consistency rules only compare sources; they cannot detect a declaration that agrees with a wrong document or record, and the previous-approval reference is stored but not compared.
+10. **Legacy pages are demo-only.** `/wallet`, `/verifier`, and `/issuer` are preserved for history. The issuer endpoint is unauthenticated, in-memory, and its integrity tag is a demo HMAC; the wallet keeps credentials in `localStorage`. None of these pages is part of the EoA workflow, and none may be presented as a real credential, issuer response, or identity.
 
 ---
 
@@ -260,4 +270,4 @@ These remain in the repository for historical reasons and **must not be presente
 | 8 | Reviewer actions, attributable decisions, audit, human control | Met; phase tests |
 | 9 | Unauthorized blocked, malformed files safe, no committed secrets, logging | Met; 7 security tests |
 | 10 | Core flows, reproducible findings, measured metrics, limitations | Met; 61-test suite + synthetic evaluation |
-| 11 | Reliable demo, simulations disclosed, claims supported | Documentation/demo completed; no browser automation/CI. Post-MVP hardening: M0 credibility containment, M1 evidence viewer, M2 structured declaration + three-way consistency, M3 QR/PDF-signature inspection, M4 report export + alert dispositions, M5 self-check, and M6 demo runbook + live walkthrough + advisory-control evaluation complete (86-test suite; no new migrations) |
+| 11 | Reliable demo, simulations disclosed, claims supported | Documentation/demo completed; no browser automation/CI. Post-MVP hardening: M0 credibility containment, M1 evidence viewer, M2 structured declaration + three-way consistency, M3 QR/PDF-signature inspection, M4 report export + alert dispositions, M5 self-check, M6 demo runbook + live walkthrough + advisory-control evaluation, and M7 legacy issuer portal demo path (opt-in flag + deterministic local-chain deploy) complete (86-test suite; no new migrations) |
