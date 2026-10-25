@@ -55,6 +55,9 @@ def test_structured_extraction_produces_evidence_linked_fields(client, applicant
     assert fields["valid_until"]["normalized_value"] == "2031-03-31"
     assert fields["institution_name"]["page"] == 1
     assert fields["institution_name"]["bbox"]
+    # Page geometry lets the evidence viewer position boxes on the rendered page.
+    assert fields["institution_name"]["page_width"] > 0
+    assert fields["institution_name"]["page_height"] > 0
     assert all(field["extractor"].startswith("ocr-phase4") for field in extraction["fields"])
 
 
@@ -90,8 +93,14 @@ def test_blank_document_is_unreadable_and_blocks_submission(client, applicant_he
     extraction = client.get(
         f"/api/v1/document-versions/{version_id}/extraction", headers=applicant_headers
     ).json()
-    assert extraction["status"] == "UNREADABLE"
-    assert extraction["error_code"] == "NO_TEXT"
+    if extraction["status"] == "FAILED":
+        # Tesseract is an environment prerequisite (see AGENTS.md). Without it a
+        # blank page cannot be distinguished from an unreadable scan, so the
+        # extraction must say so explicitly instead of blaming the document.
+        assert extraction["error_code"] == "OCR_ENGINE_UNAVAILABLE"
+    else:
+        assert extraction["status"] == "UNREADABLE"
+        assert extraction["error_code"] == "NO_TEXT"
 
     item = next(
         entry

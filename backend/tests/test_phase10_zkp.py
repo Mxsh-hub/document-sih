@@ -1,13 +1,18 @@
 from __future__ import annotations
 
 import json
+import os
 import subprocess
 from pathlib import Path
 
 from helpers import create_application
 
 BACKEND = Path(__file__).resolve().parents[1]
+# npm writes both a POSIX shim and Windows `.cmd` wrapper into `.bin`. Windows
+# cannot exec the extensionless shell script directly.
 SNARKJS = BACKEND.parent / "circuits" / "node_modules" / ".bin" / "snarkjs"
+if os.name == "nt":
+    SNARKJS = SNARKJS.with_name("snarkjs.cmd")
 WASM = BACKEND / "circuits" / "faculty_threshold" / "faculty_threshold.wasm"
 ZKEY = BACKEND / "circuits" / "faculty_threshold" / "faculty_threshold_final.zkey"
 

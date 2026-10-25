@@ -158,7 +158,9 @@ The backend remains a modular monolith. Each module owns its tables and exposes 
 | `anomaly` | `anomaly_signals` | `analyze_version` |
 | `zkp` | `zk_proof_requests`, `zk_proofs` | `create_request`, `verify_submission` |
 | `anchoring` | `chain_anchors`, `jobs` | `enqueue_anchor`, `record_confirmation`, `retry` |
-| `review` | `review_actions`, `decisions`, `alerts` | `assign`, `note`, `request_rectification`, `escalate`, `recommend`, `decide` |
+| `review` | `review_actions`, `decisions`, `alerts` | `assign`, `note`, `request_rectification`, `escalate`, `recommend`, `decide`, `sync_alerts`, `resolve_alert` |
+| `reporting` (no tables) | — | `build_application_report`, `export_application_report` (JSON/Markdown/HTML) |
+| `self_check` (no tables) | — | `build_self_check` (read-only pre-submission preview) |
 | `audit` | `audit_events`, `audit_chain_state` | `append`, `query`, `verify_chain` |
 
 Cross-module rule: no imports of another module's ORM models. Use DTOs and service calls.
@@ -219,6 +221,8 @@ External calls happen **before** evaluation. The rule engine receives a frozen c
 
 ### 6.3 Issuer verification
 
+**As built:** `POST /document-versions/{id}/issuer-verifications` has two paths. `issuer_code=demo` verifies a real Ed25519 signature over the synthetic credential's canonical JSON and binds it to the document SHA-256; `issuer_code=external` records an explicit `SOURCE_UNAVAILABLE` because no authorised external source is configured. Both write an `issuer_verifications` row and an `issuer.verification_recorded` audit event. The numbered adapter-worker flow below is the target design.
+
 1. Worker selects adapter by document type and adapter capabilities.
 2. Adapter returns `{status, source, simulated, response_ref, fields, retrieved_at}`.
 3. Response is validated against a schema; unknown fields are ignored.
@@ -260,6 +264,101 @@ The verifier service only holds verification keys and snarkjs. It has no databas
 - Reviewer actions are commands with validation, rationale, and an audit event in the same transaction.
 - Decisions require `APPROVER` role and a recorded scope; AI outputs are never inputs to an automatic decision.
 - Audit insertion serializes on `audit_chain_state` (row lock) to maintain a strict hash chain. Failed/denied requests go to a separate security log, not the business audit chain.
+
+### 6.7 Evidence review console (as built)
+
+`/compliance` is the workflow console. Its evidence workspace reads one `review-overview` payload and renders three panes: findings (sorted by outcome, then severity), the finding's own evidence and rule detail, and the source document with the evidence box drawn on it.
+
+- **No coordinates are recomputed server-side at read time.** `extracted_fields` stores `page`, `bbox`, `page_width`, and `page_height` at extraction time, and validation copies them into `finding_evidence.metadata_json`. The client converts each box to fractions of the stored page size, which keeps overlays aligned whether the source was a PDF text layer (points) or an OCR'd raster (pixels).
+- **PDF rendering is lazy.** `pdfjs-dist` and its worker are loaded with a dynamic `import()` only when a PDF is opened, so the console's initial bundle does not carry the renderer. Only pages that carry evidence are rasterised unless the reviewer asks for all pages.
+- **Images are rendered directly.** For image uploads the natural image size replaces the stored page size, because OCR boxes on images are in natural pixels.
+- **Downloads stay short-lived.** The viewer requests a signed URL (`POST /document-versions/{id}/download-url`) per open document and resolves relative URLs against the API base, since the local storage backend returns a signed path rather than an absolute URL.
+- **The UI states the limit of the box.** Every pane repeats that OCR boxes may be imprecise and that a highlight is not proof of authenticity.
+
+### 6.8 Legacy consumer-wallet surface
+
+The original credential-wallet routers (`upload`, `digilocker`, `issuer`, `verify`, `verifier`) are mounted only when `LEGACY_API_ENABLED=true`. They predate the compliance workflow, several were unauthenticated, and their scoring/liveness modules are simulated, so they must not appear as AICTE capability. The legacy attestation proof is now a real Ed25519 signature with an honest `AstraEd25519Signature` proof type instead of a mislabelled `Ed25519Signature2020` claim.
+
+### 6.9 Structured declaration and three-way consistency (as built)
+
+The applicant can save one structured declaration per application (`application_declarations`): affiliation number and validity, programmes with intake, total intake, faculty count, and a previous-approval reference. It is editable only while the application is a `DRAFT` and is audited on every save (`application.declaration_saved`, with the field names that changed).
+
+Validation then evaluates three consistency rules against a frozen run context:
+
+| Rule | Declared source | Compared with | Missing input |
+|---|---|---|---|
+| `AFFILIATION_DECLARATION_MATCH` | affiliation number, valid-until | extracted `affiliation_number` / `valid_until` from the affiliation certificate | `NOT_AVAILABLE` |
+| `PROGRAMME_DECLARATION_MATCH` | programme codes, per-programme intake, total intake | synthetic `programmes` records, plus the declaration's own intake sum | `NOT_AVAILABLE` |
+| `FACULTY_COUNT_DECLARATION_MATCH` | faculty count | count of synthetic `faculty_records` (tolerance from rule config, default 0) | `NOT_AVAILABLE` |
+
+Design constraints:
+
+- **Nothing is promoted to verified.** The declaration is applicant-supplied; a match only means two sources agree, and a mismatch only means a human should inspect both. No rule changes application status or triggers rejection.
+- **Identifiers compare after normalisation** (case and punctuation stripped) so `AFF/2026/001` and `aff-2026-001` are not reported as different. Dates compare as dates.
+- **Extra records are informational.** Synthetic records may include programmes the applicant did not declare; only declared programmes missing from the record, intake differences on shared codes, and an inconsistent declared total are `FAIL` conditions.
+- **Evidence travels with the finding.** Declaration findings carry `DECLARATION` evidence (+ `EXTRACTED_FIELD` with page geometry or `RECORD` where applicable), so the same evidence workspace shows what was compared.
+- **Rule set versioning is append-only.** The seeder publishes the 12-rule EoA set; when it finds an older set with fewer rules it archives that set and creates a new active version rather than mutating a rule set that historical runs reference.
+
+### 6.10 QR and PDF signature-structure inspection (as built)
+
+`POST /document-versions/{id}/technical-verifications` (REVIEWER/APPROVER/ADMIN) runs two local, advisory inspections and stores each result as an `issuer_verifications` row with `adapter_code` `qr-payload` or `pdf-signature`. There is no additional table and no authenticity verdict.
+
+| Inspection | What it actually does | What it does not do |
+|---|---|---|
+| `qr-payload` | Renders up to 10 pages at 150 dpi (or opens the uploaded image) and runs the OpenCV QR decoder. Records a truncated preview, SHA-256 digest, length, URL scheme/host, and page number per payload. | Never fetches the payload or contacts the host. No issuer source is resolved. |
+| `pdf-signature` | Scans the raw PDF for `/Type /Sig` signature dictionaries and `/ByteRange` arrays; records signer name, signing time, filters, file size, coverage ratio, residual gap, and whether the ranges cover the document from offset 0. | Does not verify the CMS/PKCS#7 signature, signer certificate, revocation, or trust chain. |
+
+State mapping (stored in `evidence.state`; `evidence.advisory_only` is always `true` and `evidence.cryptographically_verified` is always `false`):
+
+| State | Verification status | Meaning |
+|---|---|---|
+| `NO_QR_DETECTED` | `NOT_FOUND` | No QR payload read. Not evidence of unauthorised content. |
+| `QR_PAYLOAD_DETECTED_UNVERIFIED` | `SOURCE_UNAVAILABLE` | Payload recorded for human review; no source resolution. |
+| `QR_DECODER_UNAVAILABLE` | `SOURCE_UNAVAILABLE` | Deployment limitation, not a document finding. |
+| `QR_DECODE_FAILED` | `ERROR` | Inspection error. |
+| `NO_PDF_SIGNATURE` | `NOT_FOUND` | No signature structure. Many legitimate documents are unsigned. |
+| `PDF_SIGNATURE_PRESENT_UNVERIFIED` | `SOURCE_UNAVAILABLE` | Ranges cover the document apart from the signature placeholder; cryptography still unverified. |
+| `PDF_SIGNATURE_COVERAGE_INCOMPLETE` | `MISMATCH` | Invalid/discontiguous byte ranges or an oversized gap; advisory structural observation. |
+| `PDF_SIGNATURE_UNSUPPORTED_STRUCTURE` | `SOURCE_UNAVAILABLE` | Signature marker without a usable byte range. |
+| `PDF_PARSE_FAILED` | `ERROR` | Inspection error. |
+
+The review console displays the newest inspection per document version and adapter from `review-overview.technical_verifications`; every attempt remains in `issuer_verifications` and the audit chain. Applicants cannot run the endpoint, and `issuer_verifications` rows remain visible to applicants through the existing read endpoints.
+
+### 6.11 Report export and alert dispositions (as built)
+
+`GET /applications/{id}/report?format=json|markdown|html` (REVIEWER/APPROVER/ADMIN/AUDITOR) renders one application from the same records `review-overview` exposes, in three local formats. Rendering is dependency-free (no PDF engine, no template engine, no signing), so the three formats cannot drift from each other.
+
+- `services/reports.py` owns `REPORT_VERSION = "application-report-1.0"`, `build_application_report`, `render_markdown`, `render_html`, `render_json`, and the `export_application_report` wrapper that writes the `application.report_exported` audit event before returning the body.
+- Every report carries the `ADVISORY_LIMITATIONS` list: the export is a prototype review aid, findings/anomalies/QR payloads/signature structures are advisory, the declaration is applicant-supplied, issuer data is synthetic, and final decisions rest with authorized humans. HTML is escaped and self-contained (inline CSS only).
+- Exports are staff-only because they aggregate findings, alerts, decisions, and audit state that applicants do not see. The response is always an attachment; there is no signed or official report artefact.
+
+Alert dispositions reuse the existing `alerts.payload` JSONB, so this milestone adds **no migration**:
+
+| Concern | Behaviour |
+|---|---|
+| Disposition values | `ADDRESSED` (default), `FALSE_POSITIVE`, `DUPLICATE`, `SUPERSEDED`, `ACCEPTED_RISK`, `ESCALATED` |
+| Validation | `FALSE_POSITIVE`/`ACCEPTED_RISK` require a note (`400 VALIDATION_FAILED`); the value is a Pydantic `Literal`, not a DB enum |
+| Storage | `payload.disposition` + `payload.resolution_note`; `Alert.disposition` is a read-only Python property |
+| Audit | `alert.resolved` carries the disposition; acknowledgement stays `alert.acknowledged` |
+| Stale alerts | `sync_alerts` resolves OPEN/ACKNOWLEDGED finding/anomaly alerts whose `source_ref` is absent from the newest run as `SUPERSEDED` with `resolved_by = null` and an `alert.superseded` audit event (system actor). Rectification/escalation alerts are never auto-resolved. |
+| Access | Alert detail/acknowledge/resolve re-check the alert's application scope, returning `404` for out-of-scope staff instead of disclosing existence |
+
+### 6.12 Pre-submission self-check (as built)
+
+`GET /applications/{id}/self-check` is a read-only preview for `DRAFT` and `RECTIFICATION_REQUESTED` applications (`409` otherwise). `services/self_check.py` builds the response with no writes: no validation run, no alerts, no audit event.
+
+- **Blocking** checks come from `applications.missing_required_items`, the same helper `submit_application` uses, so the preview cannot disagree with the real submission gate. Each missing item becomes `CHECKLIST_MISSING:<code>`; `can_submit` is `not missing_required_items(...)`.
+- **Warnings/Info** cover rejected or unversioned documents, extraction problems, missing/incomplete declarations, FAIL/INCONCLUSIVE findings from the latest run, advisory anomaly signals, and missing technical inspection. They never set `can_submit = false`.
+- The self-check deliberately does **not** run the rule engine; it reports the latest run and says so. It returns `application_id`, `reference_no`, `status`, `check_version`, `generated_at`, `can_submit`, `counts`, `checks`, and an `advisory_note`.
+
+### 6.13 Demo and evaluation tooling (as built)
+
+Two operator tools exercise the built system without adding runtime code paths:
+
+- `backend/scripts/demo_smoke.py` is an HTTP client walkthrough against a running backend (`/health` → login → create → self-check → upload → declaration → submit → review overview → technical inspection → report export → alert disposition). It imports no application module, so it validates the deployed surface rather than internals, and it exits non-zero on the first divergence.
+- `backend/evaluation/run_evaluation.py` builds a disposable `astra_evaluation` database, seeds it, and measures extraction, rules, anomalies, issuer states, declaration consistency, and an `advisory_controls` block. The advisory block is a set of binary assertions (gate parity, no-write preview, non-committal inspection, report claim safety, export auditability, disposition gating, stale-alert supersede) rather than accuracy statistics, because those properties must hold absolutely.
+
+Neither tool writes to `astra`/`astra_test`, and neither changes schema or application behaviour. `docs/DEMO_RUNBOOK.md` is the spoken script, safe-phrasing table, and troubleshooting guide.
 
 ---
 
@@ -427,6 +526,8 @@ All adapters expose a capability descriptor (`available`, `synthetic`, `supports
 | 9 | Hardening, rate limits, retention, security tests |
 | 10 | E2E, synthetic dataset, evaluation harness |
 | 11 | Demo seed, reproducible compose, documentation |
+| M4 | Advisory report export (JSON/Markdown/HTML, no PDF/signature) and alert dispositions in `alerts.payload`; stale alerts auto-superseded |
+| M5 | Read-only pre-submission self-check reusing the submission gate; no schema change |
 
 ---
 

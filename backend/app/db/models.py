@@ -297,6 +297,9 @@ class Application(Base):
         cascade="all, delete-orphan",
         order_by="ApplicationStatusHistory.created_at",
     )
+    declaration: Mapped["ApplicationDeclaration | None"] = relationship(
+        back_populates="application", cascade="all, delete-orphan", uselist=False
+    )
     created_by_user: Mapped[User] = relationship(foreign_keys=[created_by])
     assigned_reviewer: Mapped[User | None] = relationship(foreign_keys=[assigned_reviewer_id])
 
@@ -379,6 +382,55 @@ class ApplicationStatusHistory(Base):
     application: Mapped[Application] = relationship(back_populates="status_history")
 
     __table_args__ = (Index("ix_application_status_history_application", "application_id"),)
+
+
+class ApplicationDeclaration(Base):
+    """Applicant-declared structured facts for the EoA application.
+
+    These values are what the institution claims. They are never treated as
+    verified: validation rules compare them with extracted document fields and
+    with the synthetic institutional records, and any divergence is advisory
+    input for human review.
+    """
+
+    __tablename__ = "application_declarations"
+
+    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
+    application_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid,
+        ForeignKey("applications.id", ondelete="CASCADE"),
+        nullable=False,
+        unique=True,
+    )
+    affiliation_number: Mapped[str | None] = mapped_column(Text)
+    affiliation_valid_until: Mapped[date | None] = mapped_column(Date)
+    programmes: Mapped[list[dict[str, Any]]] = mapped_column(
+        JSONB, nullable=False, default=list, server_default="[]"
+    )
+    total_intake: Mapped[int | None] = mapped_column(Integer)
+    faculty_count: Mapped[int | None] = mapped_column(Integer)
+    previous_approval_reference: Mapped[str | None] = mapped_column(Text)
+    declared_by: Mapped[uuid.UUID | None] = mapped_column(
+        Uuid, ForeignKey("users.id", ondelete="SET NULL")
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=utcnow, server_default=sa.func.now()
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        default=utcnow,
+        onupdate=utcnow,
+        server_default=sa.func.now(),
+    )
+    version: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
+
+    application: Mapped[Application] = relationship(back_populates="declaration")
+
+    __table_args__ = (
+        CheckConstraint("total_intake IS NULL OR total_intake >= 0", name="total_intake_non_negative"),
+        CheckConstraint("faculty_count IS NULL OR faculty_count >= 0", name="faculty_count_non_negative"),
+    )
 
 
 class Document(Base):
@@ -647,6 +699,10 @@ class ExtractedField(Base):
     value_type: Mapped[str] = mapped_column(Text, nullable=False, default="TEXT")
     page: Mapped[int | None] = mapped_column(Integer)
     bbox: Mapped[dict[str, Any] | None] = mapped_column(JSONB)
+    # Page geometry at extraction time, so evidence boxes can be positioned on the
+    # rendered page (PDF points for text layers, pixels for OCR'd rasters).
+    page_width: Mapped[Decimal | None] = mapped_column(Numeric(10, 3))
+    page_height: Mapped[Decimal | None] = mapped_column(Numeric(10, 3))
     confidence: Mapped[Decimal | None] = mapped_column(Numeric(4, 3))
     extractor: Mapped[str] = mapped_column(Text, nullable=False)
     created_at: Mapped[datetime] = mapped_column(
@@ -989,6 +1045,19 @@ class Alert(Base):
         UniqueConstraint("application_id", "alert_type", "source_ref", name="uq_alerts_app_type_source"),
         Index("ix_alerts_application_status", "application_id", "status"),
     )
+
+    @property
+    def disposition(self) -> str | None:
+        """Human disposition recorded on resolution, stored in ``payload``.
+
+        Kept in JSONB rather than a new enum column so resolving an alert does
+        not require a schema migration. ``None`` means no disposition has been
+        recorded yet.
+        """
+        if not self.payload:
+            return None
+        value = self.payload.get("disposition")
+        return str(value) if value else None
 
 
 class AuditEvent(Base):

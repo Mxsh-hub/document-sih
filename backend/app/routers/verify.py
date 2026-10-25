@@ -46,6 +46,10 @@ async def run_forensics_verification(req: Request, file_id: str):
     return {
         "file_id": file_id,
         "source_type": source_type,
+        "advisory_note": (
+            "Legacy heuristic pipeline. Numeric scores are preliminary indicators only and "
+            "must not be presented as a forgery, authenticity, or compliance determination."
+        ),
         "extracted_data": structured_data,
         "swarm_result": result.model_dump()
     }
@@ -53,7 +57,9 @@ async def run_forensics_verification(req: Request, file_id: str):
 @router.post("/attest", response_model=W3CVerifiableCredential)
 async def attest_verified_document(req: AttestRequest):
     """
-    If a Silver tier PDF passes the AI swarm, AstraVerify issues an Attested W3C VC signed by did:web:astraverify.in.
+    Legacy demo endpoint. Issues a demo credential signed with a locally derived
+    Ed25519 key (proof type ``AstraEd25519Signature``). It is not an official
+    attestation and is not a W3C Data Integrity proof.
     """
     info = storage.get_file_info(req.file_id)
     if not info:

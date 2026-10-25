@@ -27,6 +27,7 @@ from app.services.issuers import (
     verify_demo_credential,
     verify_external_issuer,
 )
+from app.services.technical_verification import inspect_document_version, supports_inspection
 
 router = APIRouter(tags=["Issuer Verification"])
 
@@ -105,6 +106,30 @@ def verify_issuer_credential(
             db, version=version, credential_id=payload.credential_id, actor=user
         )
     return IssuerVerificationOut.model_validate(verification)
+
+
+@router.post(
+    "/document-versions/{version_id}/technical-verifications",
+    response_model=list[IssuerVerificationOut],
+    status_code=status.HTTP_201_CREATED,
+)
+def run_technical_verification(
+    version_id: uuid.UUID,
+    user: Annotated[User, Depends(require_roles(Role.REVIEWER, Role.APPROVER, Role.ADMIN))],
+    db: Annotated[Session, Depends(get_db)],
+):
+    """Advisory QR and PDF signature-structure inspection. No authenticity claim."""
+    version = get_document_version_or_404(db, version_id, user)
+    if not supports_inspection(version):
+        raise ApiError(
+            400,
+            "UNSUPPORTED_MEDIA_TYPE",
+            "Technical inspection supports PDF and image document versions only.",
+        )
+    return [
+        IssuerVerificationOut.model_validate(item)
+        for item in inspect_document_version(db, version=version, actor=user)
+    ]
 
 
 @router.get(

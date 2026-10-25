@@ -8,7 +8,7 @@ AstraVerify adapts the original privacy-preserving credential-wallet demo into a
 
 The MVP category is **Extension of Approval (EoA)**. The platform is **advisory**: it does not prove forgery, does not authenticate documents by itself, and never records an approval or rejection without an authorized human decision.
 
-The implementation follows [`IMPLEMENTATION_ROADMAP.md`](IMPLEMENTATION_ROADMAP.md). Phases 1–10 are implemented and verified locally; Phase 11 documentation and demo controls are in this repository.
+The implementation follows [`IMPLEMENTATION_ROADMAP.md`](IMPLEMENTATION_ROADMAP.md). Phases 1–10 are implemented and verified locally; Phase 11 documentation and demo controls are in this repository, together with post-MVP hardening milestones M0–M6 (credibility containment, evidence viewer, structured declaration + three-way consistency, advisory QR/signature inspection, report export + alert dispositions, pre-submission self-check, and demo hardening + evaluation).
 
 ---
 
@@ -16,7 +16,7 @@ The implementation follows [`IMPLEMENTATION_ROADMAP.md`](IMPLEMENTATION_ROADMAP.
 
 | Area | Status | Evidence |
 |---|---|---|
-| PostgreSQL persistence, migrations, seed data | **Working** | SQLAlchemy 2 models + Alembic; head `4eeaf2dbd8cc` |
+| PostgreSQL persistence, migrations, seed data | **Working** | SQLAlchemy 2 models + Alembic; head `c3d5e7f9a1b2` |
 | Authentication, refresh tokens, RBAC, tenant isolation | **Working** | Argon2id, JWT, object-level checks; pytest |
 | EoA applications, checklist snapshots, submission gate | **Working** | `/api/v1/applications`, checklist and state machine |
 | Document upload, immutable versions, SHA-256, local/S3 storage | **Working** | `/api/v1/applications/{id}/documents`, signed downloads |
@@ -26,11 +26,18 @@ The implementation follows [`IMPLEMENTATION_ROADMAP.md`](IMPLEMENTATION_ROADMAP.
 | Advisory anomaly and duplicate signals | **Working** | Heuristics only; never a forgery claim |
 | Infrastructure evidence presence/completeness | **Working** | No computer-vision claims in the MVP |
 | Review queue, assignment, rectification, escalation, decisions, alerts | **Working** | `/api/v1/review`, `/api/v1/applications/*/review-actions` |
+| Alert dispositions and stale-alert supersede | **Working** | `alerts.payload.disposition`; `FALSE_POSITIVE`/`ACCEPTED_RISK` require a note |
+| Structured declaration + three-way consistency | **Working, advisory** | `application_declarations`; declared vs extracted vs synthetic record |
+| Evidence workspace with document rendering | **Working** | `/compliance` renders the cited page and bounding box |
+| Advisory QR and PDF signature-structure inspection | **Working, advisory** | Local decode only; no fetch, no CMS/certificate/trust-chain verification |
+| Advisory JSON/Markdown/HTML report export | **Working, advisory** | `GET /api/v1/applications/{id}/report`; audited, unsigned, no PDF |
+| Read-only pre-submission self-check | **Working** | `GET /api/v1/applications/{id}/self-check`; same gate as `submit` |
 | Hash-chained audit trail with verification | **Working** | `/api/v1/admin/audit-events/verify` |
 | Sound Groth16 faculty-threshold proof | **Working** | `circuits/faculty_threshold.circom`; server-side snarkjs verification |
 | Tamper-evidence anchoring on local Hardhat | **Working, optional** | `AstraVerifyAnchorV2`; hash-only anchoring; disabled by default |
 | Compliance demo UI | **Working** | `/compliance` route in the React app |
-| Synthetic evaluation harness | **Working** | `backend/evaluation/run_evaluation.py` |
+| Scripted demo walkthrough | **Working** | `backend/scripts/demo_smoke.py` (live HTTP) and [`docs/DEMO_RUNBOOK.md`](docs/DEMO_RUNBOOK.md) |
+| Synthetic evaluation harness | **Working** | `backend/evaluation/run_evaluation.py` (includes advisory controls) |
 | Real AICTE/DigiLocker/issuer API access | **Not implemented** | No authorized credentials exist |
 | ML deepfake/forgery detection | **Not implemented** | Legacy stubs remain, clearly not used as evidence |
 | Playwright browser tests / CI | **Not implemented** | Backend, contract and build checks were run manually |
@@ -41,7 +48,7 @@ Full requirement status: [`docs/REQUIREMENTS_TRACEABILITY.md`](docs/REQUIREMENTS
 
 ## Prerequisites
 
-- Python 3.11+ (verified on 3.13)
+- Python 3.10+ (verified on 3.10.11 on Windows; `backend/app/db/enums.py` carries a `StrEnum` shim for 3.10)
 - Node.js 18+ and npm
 - PostgreSQL 16 (local Docker container `astra-postgres` on port `55432` is used below)
 - Tesseract OCR on `PATH`, or set `TESSERACT_CMD`
@@ -114,7 +121,7 @@ cd backend
 ./venv/bin/pytest
 ```
 
-**Last run: 2026-10-24 — 61 passed.** The suite uses PostgreSQL database `astra_test` and local storage. It covers authorization, uploads, extraction, rules, issuers, anomalies, review/audit, security, ZKP, and an end-to-end application-to-decision flow.
+**Last run: 2026-10-25 — 86 passed, 0 failures, 0 errors.** The suite uses PostgreSQL database `astra_test` and local storage. It covers authorization, uploads, extraction, rules, issuers, anomalies, review/audit, security, declarations, technical inspection, report export, alert dispositions, self-check, ZKP, and an end-to-end application-to-decision flow.
 
 ```bash
 cd blockchain
@@ -129,7 +136,7 @@ cd frontend
 npm run build
 ```
 
-**Last run: 2026-10-24 — succeeded.** `npm run lint` still fails because no ESLint config exists.
+**Last run: 2026-10-25 — succeeded.** `npm run lint` still fails because no ESLint config exists.
 
 ### 5. Synthetic evaluation
 
@@ -140,16 +147,29 @@ cd backend
 
 The script creates and drops a dedicated `astra_evaluation` database. **Never point it at `astra` or `astra_test`.** Results are written to `backend/evaluation/results.json`.
 
-Last measured synthetic results (2026-10-23):
+Last measured synthetic results (2026-10-25, runtime 14.0 s):
 
 | Metric | Result |
 |---|---|
 | OCR field exact match | 100/100 fields across 20 synthetic documents |
-| OCR processing time | median 43.94 ms, p95 47.66 ms |
-| Rule outcomes | 27/27 labels across 3 cases |
+| OCR processing time | median 104.21 ms, p95 128.18 ms (varies 90–130 ms run to run on the dev laptop) |
+| Rule outcomes | 48/48 labels across 4 cases |
+| Declaration consistency labels | 12/12 (supplied → `PASS`, absent → `NOT_AVAILABLE`, mismatched → `FAIL`) |
 | Anomaly signals | precision 1.0, recall 1.0 over 3 synthetic applications |
 | Issuer scenarios | 3/3 expected states |
+| Advisory controls | 39/39 (self-check parity, no-write preview, report safety, dispositions, supersede) |
 | Disclaimer | Metrics describe only the synthetic corpus; they are **not** AICTE accuracy claims |
+
+### 6. Scripted demo walkthrough
+
+With the backend running:
+
+```bash
+cd backend
+./venv/bin/python scripts/demo_smoke.py
+```
+
+It drives the whole flow over real HTTP (health → login → self-check → uploads → declaration → submit → review → inspection → report export → alerts) and exits non-zero on the first divergence. See [`docs/DEMO_RUNBOOK.md`](docs/DEMO_RUNBOOK.md) for the spoken demo script and safe phrasing.
 
 ---
 
@@ -250,6 +270,7 @@ AGENTS.md             Working rules for contributors and AI agents
 - [`docs/DATA_MODEL.md`](docs/DATA_MODEL.md) — schema, constraints, audit chain, new ZKP tables
 - [`docs/API_CONTRACTS.md`](docs/API_CONTRACTS.md) — endpoint catalog, authorization matrix, errors
 - [`docs/TEST_PLAN.md`](docs/TEST_PLAN.md) — test levels, golden cases, executed results, evaluation metrics
+- [`docs/DEMO_RUNBOOK.md`](docs/DEMO_RUNBOOK.md) — demo startup, 12-minute script, safe phrasing, troubleshooting
 - [`docs/REPOSITORY_AUDIT.md`](docs/REPOSITORY_AUDIT.md) — original audit, simulated capabilities, legacy risks
 
 ---

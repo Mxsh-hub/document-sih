@@ -66,11 +66,15 @@ def test_submission_runs_versioned_validation_and_links_evidence(client, applica
     body = run.json()
     assert body["status"] == "COMPLETED"
     assert body["engine_version"].startswith("rules-phase5")
+    # Nine rules are evaluable from documents/records; the three declaration
+    # consistency rules stay NOT_AVAILABLE until a structured declaration exists.
+    assert body["summary"]["total"] == 12
     assert body["summary"]["counts"]["PASS"] == 9
+    assert body["summary"]["counts"]["NOT_AVAILABLE"] == 3
     assert body["summary"]["records_synthetic"] is True
     assert body["summary"]["synthetic_rules"] is True
     for finding in body["findings"]:
-        assert finding["outcome"] == "PASS", finding
+        assert finding["outcome"] in {"PASS", "NOT_AVAILABLE"}, finding
     evidence_codes = {finding["code"] for finding in body["findings"] if finding["evidence"]}
     assert {"AFFILIATION_VALIDITY", "INSTITUTION_NAME_CONSISTENCY", "PREVIOUS_APPROVAL_STATUS"} <= evidence_codes
 
@@ -95,7 +99,11 @@ def test_expired_affiliation_finding_is_not_an_automatic_rejection(client, appli
     expiry = next(item for item in run["findings"] if item["code"] == "AFFILIATION_VALIDITY")
     assert expiry["outcome"] == "FAIL"
     assert expiry["severity"] == "BLOCKING"
-    assert expiry["evidence"][0]["metadata_json"]["field"] == "valid_until"
+    evidence_metadata = expiry["evidence"][0]["metadata_json"]
+    assert evidence_metadata["field"] == "valid_until"
+    # Geometry travels with the evidence so the console can draw the box.
+    assert evidence_metadata["page_width"] > 0
+    assert evidence_metadata["page_height"] > 0
     assert client.get(
         f"/api/v1/applications/{application['id']}", headers=applicant_headers
     ).json()["status"] == "SUBMITTED"
@@ -157,7 +165,7 @@ def test_admin_can_version_and_configure_rules(client, admin_headers, applicant_
     rule_sets = client.get("/api/v1/admin/rule-sets", headers=admin_headers)
     assert rule_sets.status_code == 200
     eoa = next(item for item in rule_sets.json() if item["code"] == "EOA-SYNTHETIC-RULES")
-    assert len(eoa["rules"]) == 9
+    assert len(eoa["rules"]) == 12
 
     created = client.post(
         "/api/v1/admin/rule-sets",

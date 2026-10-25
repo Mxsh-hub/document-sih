@@ -175,7 +175,7 @@ def update_application(db: Session, application: Application, actor: User, cycle
     return application
 
 
-def _missing_required_items(db: Session, application: Application) -> list[str]:
+def missing_required_items(db: Session, application: Application) -> list[str]:
     missing: list[str] = []
     for item in application.checklist_items:
         if not item.required:
@@ -196,7 +196,7 @@ def submit_application(db: Session, application: Application, actor: User) -> Ap
     require_application_owner(application, actor)
     if application.status not in {ApplicationStatus.DRAFT, ApplicationStatus.RECTIFICATION_REQUESTED}:
         raise ApiError(409, "STATE_CONFLICT", "Only a draft or rectification application may be submitted.")
-    missing = _missing_required_items(db, application)
+    missing = missing_required_items(db, application)
     if missing:
         raise ApiError(
             400,

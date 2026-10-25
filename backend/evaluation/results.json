@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-10-23T18:09:55.671585+00:00",
+  "generated_at": "2026-10-25T16:03:36.494659+00:00",
   "dataset": "synthetic, generated in-memory by this script",
   "disclaimer": "Metrics describe only the synthetic evaluation corpus. They are not AICTE accuracy claims and must not be presented as evidence of real-world performance.",
   "ocr_field_extraction": {
@@ -9,9 +9,9 @@
     "field_exact_match_accuracy": 1.0,
     "processing_time_ms": {
       "samples": 20,
-      "median": 43.94,
-      "p95": 47.66,
-      "max": 73.15
+      "median": 104.21,
+      "p95": 128.18,
+      "max": 144.47
     },
     "per_document": [
       {
@@ -117,14 +117,14 @@
     ]
   },
   "rule_validation": {
-    "cases": 3,
-    "labels_total": 27,
-    "labels_correct": 27,
+    "cases": 4,
+    "labels_total": 48,
+    "labels_correct": 48,
     "rule_outcome_accuracy": 1.0,
     "details": [
       {
         "case": "valid",
-        "application_id": "1f0ea72e-22b8-4d4b-9e3c-adbb1d7ca214",
+        "application_id": "183313b3-850e-4d7a-bb7e-518cbfc475b1",
         "outcomes": {
           "CHECKLIST_REQUIRED": "PASS",
           "DOCUMENT_TEXT_EXTRACTED": "PASS",
@@ -134,15 +134,19 @@
           "TER_PAYMENT_STATUS": "PASS",
           "ACCREDITATION_VALIDITY": "PASS",
           "OPEN_DEFICIENCIES": "PASS",
-          "FACULTY_APPROVED_MINIMUM": "PASS"
+          "FACULTY_APPROVED_MINIMUM": "PASS",
+          "AFFILIATION_DECLARATION_MATCH": "PASS",
+          "PROGRAMME_DECLARATION_MATCH": "PASS",
+          "FACULTY_COUNT_DECLARATION_MATCH": "PASS"
         },
         "expected_overrides": {},
-        "rules_correct": 9,
-        "rules_total": 9
+        "declaration_supplied": true,
+        "rules_correct": 12,
+        "rules_total": 12
       },
       {
         "case": "expired_affiliation",
-        "application_id": "c4006e99-be82-44b3-9146-8d731e686b48",
+        "application_id": "00e5064c-895d-4fef-abca-ead926f7a145",
         "outcomes": {
           "CHECKLIST_REQUIRED": "PASS",
           "DOCUMENT_TEXT_EXTRACTED": "PASS",
@@ -152,17 +156,21 @@
           "TER_PAYMENT_STATUS": "PASS",
           "ACCREDITATION_VALIDITY": "PASS",
           "OPEN_DEFICIENCIES": "PASS",
-          "FACULTY_APPROVED_MINIMUM": "PASS"
+          "FACULTY_APPROVED_MINIMUM": "PASS",
+          "AFFILIATION_DECLARATION_MATCH": "NOT_AVAILABLE",
+          "PROGRAMME_DECLARATION_MATCH": "NOT_AVAILABLE",
+          "FACULTY_COUNT_DECLARATION_MATCH": "NOT_AVAILABLE"
         },
         "expected_overrides": {
           "AFFILIATION_VALIDITY": "FAIL"
         },
-        "rules_correct": 9,
-        "rules_total": 9
+        "declaration_supplied": false,
+        "rules_correct": 12,
+        "rules_total": 12
       },
       {
         "case": "institution_name_mismatch",
-        "application_id": "d034669e-c20e-493e-a836-6ae7ebdb718c",
+        "application_id": "ef378f99-4a20-4777-b989-167b42285061",
         "outcomes": {
           "CHECKLIST_REQUIRED": "PASS",
           "DOCUMENT_TEXT_EXTRACTED": "PASS",
@@ -172,13 +180,43 @@
           "TER_PAYMENT_STATUS": "PASS",
           "ACCREDITATION_VALIDITY": "PASS",
           "OPEN_DEFICIENCIES": "PASS",
-          "FACULTY_APPROVED_MINIMUM": "PASS"
+          "FACULTY_APPROVED_MINIMUM": "PASS",
+          "AFFILIATION_DECLARATION_MATCH": "NOT_AVAILABLE",
+          "PROGRAMME_DECLARATION_MATCH": "NOT_AVAILABLE",
+          "FACULTY_COUNT_DECLARATION_MATCH": "NOT_AVAILABLE"
         },
         "expected_overrides": {
           "INSTITUTION_NAME_CONSISTENCY": "FAIL"
         },
-        "rules_correct": 9,
-        "rules_total": 9
+        "declaration_supplied": false,
+        "rules_correct": 12,
+        "rules_total": 12
+      },
+      {
+        "case": "declaration_mismatch",
+        "application_id": "4cff2e1a-8ba8-446a-9f66-69ff61355120",
+        "outcomes": {
+          "CHECKLIST_REQUIRED": "PASS",
+          "DOCUMENT_TEXT_EXTRACTED": "PASS",
+          "AFFILIATION_VALIDITY": "PASS",
+          "INSTITUTION_NAME_CONSISTENCY": "PASS",
+          "PREVIOUS_APPROVAL_STATUS": "PASS",
+          "TER_PAYMENT_STATUS": "PASS",
+          "ACCREDITATION_VALIDITY": "PASS",
+          "OPEN_DEFICIENCIES": "PASS",
+          "FACULTY_APPROVED_MINIMUM": "PASS",
+          "AFFILIATION_DECLARATION_MATCH": "FAIL",
+          "PROGRAMME_DECLARATION_MATCH": "FAIL",
+          "FACULTY_COUNT_DECLARATION_MATCH": "FAIL"
+        },
+        "expected_overrides": {
+          "AFFILIATION_DECLARATION_MATCH": "FAIL",
+          "PROGRAMME_DECLARATION_MATCH": "FAIL",
+          "FACULTY_COUNT_DECLARATION_MATCH": "FAIL"
+        },
+        "declaration_supplied": true,
+        "rules_correct": 12,
+        "rules_total": 12
       }
     ]
   },
@@ -191,13 +229,13 @@
     "recall": 1.0,
     "details": [
       {
-        "application_id": "9acecbad-5700-401d-a8ab-c2c2f444fcba",
+        "application_id": "3fea79c9-cd59-4827-a03e-be6b9969d0ab",
         "expected": [],
         "actual": [],
         "advisory_flags": true
       },
       {
-        "application_id": "1f5c67f1-130b-41ac-a241-d51d5f8c5cbe",
+        "application_id": "a955e163-d640-4e1b-9a42-2c49cbde87a5",
         "expected": [
           "CROSS_APPLICATION_FILE_REUSE",
           "SHARED_REFERENCE_IDENTIFIER"
@@ -209,7 +247,7 @@
         "advisory_flags": true
       },
       {
-        "application_id": "7033f2d3-f563-4b2e-b49a-600aba42b650",
+        "application_id": "7aad293a-5616-48fc-b3f8-5856b15bb2bf",
         "expected": [
           "PDF_EDITING_TOOL_METADATA"
         ],
@@ -235,5 +273,357 @@
     },
     "all_simulated_sources_labelled": true
   },
-  "total_runtime_seconds": 3.44
+  "advisory_controls": {
+    "declaration_consistency": {
+      "checks_total": 12,
+      "checks_passed": 12,
+      "pass_rate": 1.0,
+      "checks": [
+        {
+          "check": "valid:AFFILIATION_DECLARATION_MATCH",
+          "passed": true,
+          "observed": {
+            "expected": "PASS",
+            "actual": "PASS"
+          }
+        },
+        {
+          "check": "valid:FACULTY_COUNT_DECLARATION_MATCH",
+          "passed": true,
+          "observed": {
+            "expected": "PASS",
+            "actual": "PASS"
+          }
+        },
+        {
+          "check": "valid:PROGRAMME_DECLARATION_MATCH",
+          "passed": true,
+          "observed": {
+            "expected": "PASS",
+            "actual": "PASS"
+          }
+        },
+        {
+          "check": "expired_affiliation:AFFILIATION_DECLARATION_MATCH",
+          "passed": true,
+          "observed": {
+            "expected": "NOT_AVAILABLE",
+            "actual": "NOT_AVAILABLE"
+          }
+        },
+        {
+          "check": "expired_affiliation:FACULTY_COUNT_DECLARATION_MATCH",
+          "passed": true,
+          "observed": {
+            "expected": "NOT_AVAILABLE",
+            "actual": "NOT_AVAILABLE"
+          }
+        },
+        {
+          "check": "expired_affiliation:PROGRAMME_DECLARATION_MATCH",
+          "passed": true,
+          "observed": {
+            "expected": "NOT_AVAILABLE",
+            "actual": "NOT_AVAILABLE"
+          }
+        },
+        {
+          "check": "institution_name_mismatch:AFFILIATION_DECLARATION_MATCH",
+          "passed": true,
+          "observed": {
+            "expected": "NOT_AVAILABLE",
+            "actual": "NOT_AVAILABLE"
+          }
+        },
+        {
+          "check": "institution_name_mismatch:FACULTY_COUNT_DECLARATION_MATCH",
+          "passed": true,
+          "observed": {
+            "expected": "NOT_AVAILABLE",
+            "actual": "NOT_AVAILABLE"
+          }
+        },
+        {
+          "check": "institution_name_mismatch:PROGRAMME_DECLARATION_MATCH",
+          "passed": true,
+          "observed": {
+            "expected": "NOT_AVAILABLE",
+            "actual": "NOT_AVAILABLE"
+          }
+        },
+        {
+          "check": "declaration_mismatch:AFFILIATION_DECLARATION_MATCH",
+          "passed": true,
+          "observed": {
+            "expected": "FAIL",
+            "actual": "FAIL"
+          }
+        },
+        {
+          "check": "declaration_mismatch:FACULTY_COUNT_DECLARATION_MATCH",
+          "passed": true,
+          "observed": {
+            "expected": "FAIL",
+            "actual": "FAIL"
+          }
+        },
+        {
+          "check": "declaration_mismatch:PROGRAMME_DECLARATION_MATCH",
+          "passed": true,
+          "observed": {
+            "expected": "FAIL",
+            "actual": "FAIL"
+          }
+        }
+      ]
+    },
+    "advisory_controls": {
+      "checks_total": 39,
+      "checks_passed": 39,
+      "pass_rate": 1.0,
+      "checks": [
+        {
+          "check": "self_check_available_for_draft",
+          "passed": true,
+          "observed": 200
+        },
+        {
+          "check": "self_check_blocks_missing_evidence",
+          "passed": true,
+          "observed": {
+            "BLOCKING": 4,
+            "WARNING": 1,
+            "INFO": 1,
+            "OK": 0
+          }
+        },
+        {
+          "check": "self_check_reports_cannot_submit",
+          "passed": true,
+          "observed": false
+        },
+        {
+          "check": "self_check_writes_no_audit_event",
+          "passed": true,
+          "observed": {
+            "before": 1,
+            "after": 1
+          }
+        },
+        {
+          "check": "preview_matches_blocked_submit",
+          "passed": true,
+          "observed": 400
+        },
+        {
+          "check": "self_check_clears_after_evidence",
+          "passed": true,
+          "observed": {
+            "BLOCKING": 0,
+            "WARNING": 0,
+            "INFO": 2,
+            "OK": 2
+          }
+        },
+        {
+          "check": "preview_matches_accepted_submit",
+          "passed": true,
+          "observed": 200
+        },
+        {
+          "check": "self_check_closed_after_submission",
+          "passed": true,
+          "observed": 409
+        },
+        {
+          "check": "technical_inspection_returns_two_advisers",
+          "passed": true,
+          "observed": [
+            "pdf-signature",
+            "qr-payload"
+          ]
+        },
+        {
+          "check": "technical_inspection_never_claims_verified",
+          "passed": true,
+          "observed": {
+            "qr-payload": "NOT_FOUND",
+            "pdf-signature": "NOT_FOUND"
+          }
+        },
+        {
+          "check": "unsigned_pdf_signature_not_found",
+          "passed": true,
+          "observed": "NOT_FOUND"
+        },
+        {
+          "check": "qr_state_is_non_committal",
+          "passed": true,
+          "observed": "NOT_FOUND"
+        },
+        {
+          "check": "technical_inspection_performed_no_verification",
+          "passed": true,
+          "observed": {
+            "qr-payload": {
+              "advisory_only": true,
+              "external_lookup_performed": false,
+              "cryptographically_verified": false,
+              "revocation_checked": null,
+              "trust_chain_checked": null
+            },
+            "pdf-signature": {
+              "advisory_only": true,
+              "external_lookup_performed": null,
+              "cryptographically_verified": false,
+              "revocation_checked": false,
+              "trust_chain_checked": false
+            }
+          }
+        },
+        {
+          "check": "report_json_exported",
+          "passed": true,
+          "observed": 200
+        },
+        {
+          "check": "report_json_is_attachment",
+          "passed": true,
+          "observed": "attachment; filename=\"APP-2035-000001-report.json\""
+        },
+        {
+          "check": "report_json_repeats_limitations",
+          "passed": true,
+          "observed": null
+        },
+        {
+          "check": "report_markdown_exported",
+          "passed": true,
+          "observed": 200
+        },
+        {
+          "check": "report_markdown_is_attachment",
+          "passed": true,
+          "observed": "attachment; filename=\"APP-2035-000001-report.md\""
+        },
+        {
+          "check": "report_markdown_repeats_limitations",
+          "passed": true,
+          "observed": null
+        },
+        {
+          "check": "report_html_exported",
+          "passed": true,
+          "observed": 200
+        },
+        {
+          "check": "report_html_is_attachment",
+          "passed": true,
+          "observed": "attachment; filename=\"APP-2035-000001-report.html\""
+        },
+        {
+          "check": "report_html_repeats_limitations",
+          "passed": true,
+          "observed": null
+        },
+        {
+          "check": "report_is_versioned",
+          "passed": true,
+          "observed": "application-report-1.0"
+        },
+        {
+          "check": "report_lists_all_limitations",
+          "passed": true,
+          "observed": 5
+        },
+        {
+          "check": "report_is_staff_only",
+          "passed": true,
+          "observed": null
+        },
+        {
+          "check": "unsupported_report_format_rejected",
+          "passed": true,
+          "observed": null
+        },
+        {
+          "check": "each_export_is_audited",
+          "passed": true,
+          "observed": 3
+        },
+        {
+          "check": "report_has_no_conclusive_claim",
+          "passed": true,
+          "observed": []
+        },
+        {
+          "check": "failed_findings_raise_alerts",
+          "passed": true,
+          "observed": 2
+        },
+        {
+          "check": "dismissive_disposition_requires_note",
+          "passed": true,
+          "observed": 400
+        },
+        {
+          "check": "unknown_disposition_rejected",
+          "passed": true,
+          "observed": 400
+        },
+        {
+          "check": "disposition_recorded_with_actor",
+          "passed": true,
+          "observed": {
+            "status": 200,
+            "disposition": "FALSE_POSITIVE",
+            "resolved_by": "4ef98a6f-b4a8-486b-8895-2cb131c720a9"
+          }
+        },
+        {
+          "check": "applicant_cannot_read_alert_detail",
+          "passed": true,
+          "observed": null
+        },
+        {
+          "check": "disposition_does_not_change_findings",
+          "passed": true,
+          "observed": {
+            "changed": []
+          }
+        },
+        {
+          "check": "rectification_requested",
+          "passed": true,
+          "observed": 200
+        },
+        {
+          "check": "rectified_resubmission_accepted",
+          "passed": true,
+          "observed": 200
+        },
+        {
+          "check": "stale_alerts_superseded",
+          "passed": true,
+          "observed": {
+            "stale_before_resubmit": 1,
+            "superseded_after_resubmit": 1
+          }
+        },
+        {
+          "check": "supersede_has_no_human_actor",
+          "passed": true,
+          "observed": [
+            null
+          ]
+        },
+        {
+          "check": "rectified_run_reports_valid_affiliation",
+          "passed": true,
+          "observed": "PASS"
+        }
+      ]
+    }
+  },
+  "total_runtime_seconds": 14.0
 }

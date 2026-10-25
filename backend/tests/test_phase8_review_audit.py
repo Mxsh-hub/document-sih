@@ -165,6 +165,9 @@ def test_review_assignment_alerts_rectification_and_final_decision(
     body = overview.json()
     assert body["latest_validation_run"]["findings"]
     assert body["documents"]
+    # The evidence workspace needs these to decide PDF vs image rendering.
+    assert all(item["original_filename"] for item in body["documents"])
+    assert all(item["mime_type"] for item in body["documents"])
     assert body["infrastructure_assessment"]["simulated"] is True
     assert body["decisions"][0]["decision_type"] == "APPROVE"
 

@@ -34,7 +34,9 @@ from app.db.models import (
 from app.services.assurance import infrastructure_assessment, list_anomalies
 from app.services.audit import record_audit
 from app.services.authorization import application_scope_condition, require_staff_access
+from app.services.declarations import get_declaration
 from app.services.issuers import list_verifications
+from app.services.technical_verification import latest_technical_verifications
 from app.services.validation import latest_run_for_application
 
 REVIEWABLE_STATUSES = {
@@ -99,6 +101,70 @@ def _ensure_alert(
     return alert
 
 
+DISPOSITIONS_REQUIRING_NOTE = {"FALSE_POSITIVE", "ACCEPTED_RISK"}
+AUTO_SUPERSEDED_ALERT_TYPES = {
+    AlertType.VALIDATION_FAILURE,
+    AlertType.EXPIRED_DOCUMENT,
+    AlertType.PENDING_VERIFICATION,
+    AlertType.UNRESOLVED_DISCREPANCY,
+}
+
+
+def _supersede_stale_alerts(
+    db: Session,
+    application: Application,
+    *,
+    run: ValidationRun | None,
+    signal_ids: set[str],
+) -> list[Alert]:
+    """Resolve alerts that no longer correspond to the newest validation output.
+
+    Findings and anomaly signals are re-created on every run, so an alert whose
+    source row is not part of the latest run is stale. It is resolved as
+    ``SUPERSEDED`` by the system rather than silently left open, so the alert
+    queue reflects the current evidence. Human-created rectification and
+    escalation alerts are never auto-resolved.
+    """
+    active_refs = set(signal_ids)
+    if run is not None:
+        active_refs |= {str(finding.id) for finding in run.findings}
+    stale = list(
+        db.scalars(
+            select(Alert).where(
+                Alert.application_id == application.id,
+                Alert.alert_type.in_(AUTO_SUPERSEDED_ALERT_TYPES),
+                Alert.status.in_([AlertStatus.OPEN, AlertStatus.ACKNOWLEDGED]),
+            )
+        )
+    )
+    superseded: list[Alert] = []
+    now = datetime.now(timezone.utc)
+    for alert in stale:
+        if alert.source_ref in active_refs:
+            continue
+        alert.status = AlertStatus.RESOLVED
+        alert.resolved_at = now
+        alert.payload = {
+            **(alert.payload or {}),
+            "disposition": "SUPERSEDED",
+            "resolution_note": (
+                "Superseded automatically: the source finding or anomaly is not part of the "
+                "latest validation output. No human disposition was recorded."
+            ),
+        }
+        record_audit(
+            db,
+            event_type="alert.superseded",
+            actor=None,
+            application_id=application.id,
+            entity_type="alert",
+            entity_id=alert.id,
+            payload={"alert_type": alert.alert_type.value, "source_ref": alert.source_ref},
+        )
+        superseded.append(alert)
+    return superseded
+
+
 def sync_alerts(db: Session, application: Application) -> list[Alert]:
     created: list[Alert] = []
     run = latest_run_for_application(db, application.id)
@@ -151,7 +217,8 @@ def sync_alerts(db: Session, application: Application) -> list[Alert]:
                 )
                 if before is None:
                     created.append(alert)
-    for signal in list_anomalies(db, application.id):
+    signals = list_anomalies(db, application.id)
+    for signal in signals:
         before = db.scalar(
             select(Alert.id).where(
                 Alert.application_id == application.id,
@@ -170,6 +237,12 @@ def sync_alerts(db: Session, application: Application) -> list[Alert]:
         )
         if before is None:
             created.append(alert)
+    _supersede_stale_alerts(
+        db,
+        application,
+        run=run,
+        signal_ids={str(signal.id) for signal in signals},
+    )
     db.commit()
     return created
 
@@ -207,15 +280,30 @@ def acknowledge_alert(db: Session, alert: Alert, actor: User) -> Alert:
     return alert
 
 
-def resolve_alert(db: Session, alert: Alert, actor: User, note: str | None) -> Alert:
+def resolve_alert(
+    db: Session,
+    alert: Alert,
+    actor: User,
+    note: str | None,
+    disposition: str = "ADDRESSED",
+) -> Alert:
     require_staff_access(actor)
     if alert.status is AlertStatus.RESOLVED:
         return alert
+    if disposition in DISPOSITIONS_REQUIRING_NOTE and not (note or "").strip():
+        raise ApiError(
+            400,
+            "VALIDATION_FAILED",
+            "A note is required when dismissing an alert as a false positive or accepted risk.",
+        )
     alert.status = AlertStatus.RESOLVED
     alert.resolved_by = actor.id
     alert.resolved_at = datetime.now(timezone.utc)
-    if note:
-        alert.payload = {**(alert.payload or {}), "resolution_note": note}
+    alert.payload = {
+        **(alert.payload or {}),
+        "disposition": disposition,
+        **({"resolution_note": note} if note else {}),
+    }
     record_audit(
         db,
         event_type="alert.resolved",
@@ -223,7 +311,11 @@ def resolve_alert(db: Session, alert: Alert, actor: User, note: str | None) -> A
         application_id=alert.application_id,
         entity_type="alert",
         entity_id=alert.id,
-        payload={"alert_type": alert.alert_type.value, "resolution_note": note},
+        payload={
+            "alert_type": alert.alert_type.value,
+            "disposition": disposition,
+            "resolution_note": note,
+        },
     )
     db.commit()
     db.refresh(alert)
@@ -475,8 +567,10 @@ def review_overview(db: Session, application: Application) -> dict[str, Any]:
             "version": application.version,
         },
         "latest_validation_run": run,
+        "declaration": get_declaration(db, application.id),
         "documents": documents,
         "issuer_verifications": verifications,
+        "technical_verifications": latest_technical_verifications(verifications),
         "anomaly_signals": list_anomalies(db, application.id),
         "infrastructure_assessment": infrastructure_assessment(db, application),
         "alerts": list_alerts(db, application.id),

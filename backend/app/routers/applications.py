@@ -23,13 +23,23 @@ from app.schemas.phase3 import (
     ChecklistItemOut,
     ChecklistItemPatch,
     ChecklistOut,
+    DeclarationEnvelope,
+    DeclarationOut,
+    DeclarationUpsert,
     InstitutionSummary,
     StatusHistoryOut,
+    SelfCheckOut,
     SubmitResponse,
     WithdrawRequest,
 )
 from app.services import applications as application_service
-from app.services.authorization import get_application_or_404, get_checklist_item_or_404
+from app.services import declarations as declaration_service
+from app.services import self_check as self_check_service
+from app.services.authorization import (
+    get_application_or_404,
+    get_checklist_item_or_404,
+    require_editable_application,
+)
 from app.services.assurance import scan_anomalies
 from app.services.audit import record_audit
 from app.services.review import sync_alerts
@@ -210,6 +220,32 @@ def get_checklist(
     )
 
 
+@router.get("/{application_id}/self-check", response_model=SelfCheckOut)
+def get_self_check(
+    application_id: uuid.UUID,
+    user: CurrentUser,
+    db: Annotated[Session, Depends(get_db)],
+):
+    """Preview whether submission would be accepted, without submitting.
+
+    Read-only and side-effect free: no validation run, no alerts, no audit
+    event. Blocking checks reuse the same helper that ``submit`` uses, so the
+    preview cannot disagree with the real gate. Everything else is advisory and
+    the response says so.
+    """
+    application = get_application_or_404(db, application_id, user)
+    if application.status not in {
+        ApplicationStatus.DRAFT,
+        ApplicationStatus.RECTIFICATION_REQUESTED,
+    }:
+        raise ApiError(
+            409,
+            "STATE_CONFLICT",
+            "The self-check is only available for a draft or an application under rectification.",
+        )
+    return SelfCheckOut(**self_check_service.build_self_check(db, application))
+
+
 @router.patch("/{application_id}/checklist/{item_id}", response_model=ChecklistItemOut)
 def update_checklist_item(
     application_id: uuid.UUID,
@@ -241,6 +277,39 @@ def update_checklist_item(
         document_id=payload.document_id,
     )
     return _checklist_item_out(item)
+
+
+@router.get("/{application_id}/declaration", response_model=DeclarationEnvelope)
+def get_declaration(
+    application_id: uuid.UUID,
+    user: CurrentUser,
+    db: Annotated[Session, Depends(get_db)],
+):
+    """Return the applicant's declared facts, or null when none were saved.
+
+    Any user who can view the application may read the declaration; only the
+    applicant may change it, and only while the application is a draft.
+    """
+
+    application = get_application_or_404(db, application_id, user)
+    declaration = declaration_service.get_declaration(db, application.id)
+    return DeclarationEnvelope(
+        application_id=application.id,
+        declaration=DeclarationOut.model_validate(declaration) if declaration else None,
+    )
+
+
+@router.put("/{application_id}/declaration", response_model=DeclarationOut)
+def put_declaration(
+    application_id: uuid.UUID,
+    payload: DeclarationUpsert,
+    user: CurrentUser,
+    db: Annotated[Session, Depends(get_db)],
+):
+    application = get_application_or_404(db, application_id, user)
+    require_editable_application(application, user)
+    declaration = declaration_service.upsert_declaration(db, application, user, payload)
+    return DeclarationOut.model_validate(declaration)
 
 
 @router.get("/{application_id}/status-history", response_model=list[StatusHistoryOut])

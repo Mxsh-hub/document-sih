@@ -64,7 +64,11 @@ def test_full_application_to_decision_and_zkp_audit(
 
     findings = client.get(f"/api/v1/validation-runs/{run_id}", headers=applicant_headers)
     assert findings.status_code == 200
-    assert all(item["outcome"] in {"PASS", "WARN", "FAIL"} for item in findings.json()["findings"])
+    # Declaration-consistency checks are NOT_AVAILABLE until a declaration is saved.
+    assert all(
+        item["outcome"] in {"PASS", "FAIL", "INCONCLUSIVE", "NOT_AVAILABLE", "NOT_APPLICABLE"}
+        for item in findings.json()["findings"]
+    )
 
     issued = challenge(client, applicant_headers, application["id"])
     proof, signals = make_proof(

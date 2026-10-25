@@ -1,9 +1,9 @@
 from __future__ import annotations
 
 import uuid
-from typing import Annotated
+from typing import Annotated, Literal
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, Query, Response
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
@@ -19,6 +19,7 @@ from app.schemas.phase3 import (
     AuditEventOut,
     DecisionCreate,
     DecisionOut,
+    DeclarationOut,
     InfrastructureAssessmentOut,
     IssuerVerificationOut,
     ReviewActionCreate,
@@ -38,6 +39,7 @@ from app.services.review import (
     resolve_alert,
     review_overview,
 )
+from app.services.reports import export_application_report
 
 router = APIRouter(tags=["Review and Audit"])
 
@@ -161,11 +163,28 @@ def list_all_alerts(
     return [AlertOut.model_validate(item) for item in db.scalars(statement)]
 
 
-def _get_alert(db: Session, alert_id: uuid.UUID) -> Alert:
+def _get_alert(db: Session, alert_id: uuid.UUID, user: User) -> Alert:
+    """Load an alert and enforce its application scope.
+
+    Alerts belong to an application, so alert-level access follows application
+    access. A reviewer scoped to a different institution gets ``404`` rather
+    than ``403`` so the endpoint does not disclose the alert's existence.
+    """
+    require_staff_access(user)
     alert = db.get(Alert, alert_id)
     if not alert:
         raise ApiError(404, "NOT_FOUND", "Alert not found.")
+    get_application_or_404(db, alert.application_id, user)
     return alert
+
+
+@router.get("/alerts/{alert_id}", response_model=AlertOut)
+def get_alert(
+    alert_id: uuid.UUID,
+    user: CurrentUser,
+    db: Annotated[Session, Depends(get_db)],
+):
+    return AlertOut.model_validate(_get_alert(db, alert_id, user))
 
 
 @router.post("/alerts/{alert_id}/acknowledge", response_model=AlertOut)
@@ -174,7 +193,7 @@ def acknowledge(
     user: CurrentUser,
     db: Annotated[Session, Depends(get_db)],
 ):
-    return AlertOut.model_validate(acknowledge_alert(db, _get_alert(db, alert_id), user))
+    return AlertOut.model_validate(acknowledge_alert(db, _get_alert(db, alert_id, user), user))
 
 
 @router.post("/alerts/{alert_id}/resolve", response_model=AlertOut)
@@ -185,7 +204,40 @@ def resolve(
     db: Annotated[Session, Depends(get_db)],
 ):
     return AlertOut.model_validate(
-        resolve_alert(db, _get_alert(db, alert_id), user, payload.note)
+        resolve_alert(
+            db,
+            _get_alert(db, alert_id, user),
+            user,
+            payload.note,
+            disposition=payload.disposition,
+        )
+    )
+
+
+@router.get("/applications/{application_id}/report")
+def export_report(
+    application_id: uuid.UUID,
+    user: CurrentUser,
+    db: Annotated[Session, Depends(get_db)],
+    report_format: Annotated[
+        Literal["json", "markdown", "html"], Query(alias="format")
+    ] = "json",
+):
+    """Export a self-contained, advisory application report.
+
+    Staff-only: the report aggregates findings, alerts, decisions, and audit
+    state that applicants do not see. The export is always an attachment, never
+    a signed document, and repeats the advisory limitations in its body.
+    """
+    require_staff_access(user)
+    application = get_application_or_404(db, application_id, user)
+    body, media_type, filename = export_application_report(
+        db, application, actor=user, report_format=report_format
+    )
+    return Response(
+        content=body,
+        media_type=media_type,
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
     )
 
 
@@ -203,12 +255,19 @@ def get_review_overview(
     return {
         "application": overview["application"],
         "latest_validation_run": ValidationRunOut.model_validate(run).model_dump(mode="json") if run else None,
+        "declaration": DeclarationOut.model_validate(overview["declaration"]).model_dump(mode="json")
+        if overview["declaration"]
+        else None,
         "documents": [
             {
                 "id": document.id,
                 "document_type": document.document_type.value,
                 "status": document.status.value,
                 "current_version_id": document.current_version_id,
+                "original_filename": document.current_version.original_filename
+                if document.current_version
+                else None,
+                "mime_type": document.current_version.mime_type if document.current_version else None,
                 "created_at": document.created_at,
             }
             for document in documents
@@ -216,6 +275,10 @@ def get_review_overview(
         "issuer_verifications": [
             IssuerVerificationOut.model_validate(item).model_dump(mode="json")
             for item in overview["issuer_verifications"]
+        ],
+        "technical_verifications": [
+            IssuerVerificationOut.model_validate(item).model_dump(mode="json")
+            for item in overview["technical_verifications"]
         ],
         "anomaly_signals": [
             AnomalySignalOut.model_validate(item).model_dump(mode="json")

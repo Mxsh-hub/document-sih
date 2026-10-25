@@ -30,10 +30,27 @@ class TextEvidence:
     page: int
     bbox: list[float] | None
     confidence: float
+    page_width: float | None = None
+    page_height: float | None = None
+
+
+class OcrEngineUnavailable(RuntimeError):
+    """The Tesseract binary is not installed or not on PATH.
+
+    This is a deployment problem, not a defect in the uploaded document, so it
+    must not be reported as an unreadable document.
+    """
+
+    def __init__(self, page_count: int = 0):
+        super().__init__("Tesseract OCR engine is not available on this host.")
+        self.page_count = page_count
 
 
 def _ocr_image(image: Image.Image, page: int) -> list[TextEvidence]:
-    data = pytesseract.image_to_data(image, output_type=pytesseract.Output.DICT)
+    try:
+        data = pytesseract.image_to_data(image, output_type=pytesseract.Output.DICT)
+    except pytesseract.TesseractNotFoundError as exc:
+        raise OcrEngineUnavailable() from exc
     grouped: dict[tuple[int, int, int], list[dict]] = {}
     for index, word in enumerate(data.get("text", [])):
         if not word or not str(word).strip():
@@ -56,6 +73,7 @@ def _ocr_image(image: Image.Image, page: int) -> list[TextEvidence]:
             }
         )
     results: list[TextEvidence] = []
+    width, height = float(image.width), float(image.height)
     for words in grouped.values():
         words.sort(key=lambda item: item["left"])
         text = " ".join(item["text"] for item in words).strip()
@@ -66,7 +84,16 @@ def _ocr_image(image: Image.Image, page: int) -> list[TextEvidence]:
         right = max(item["left"] + item["width"] for item in words)
         bottom = max(item["top"] + item["height"] for item in words)
         confidence = sum(item["conf"] for item in words) / len(words) / 100.0
-        results.append(TextEvidence(text=text, page=page, bbox=[left, top, right, bottom], confidence=confidence))
+        results.append(
+            TextEvidence(
+                text=text,
+                page=page,
+                bbox=[left, top, right, bottom],
+                confidence=confidence,
+                page_width=width,
+                page_height=height,
+            )
+        )
     return results
 
 
@@ -80,6 +107,7 @@ def _extract_pdf(content: bytes) -> tuple[list[TextEvidence], int, float]:
         page_count = document.page_count
         for page_index, page in enumerate(document, start=1):
             page_lines: list[TextEvidence] = []
+            page_width, page_height = float(page.rect.width), float(page.rect.height)
             blocks = page.get_text("dict").get("blocks", [])
             for block in blocks:
                 if block.get("type") != 0:
@@ -93,13 +121,18 @@ def _extract_pdf(content: bytes) -> tuple[list[TextEvidence], int, float]:
                                 page=page_index,
                                 bbox=list(line.get("bbox", [])) or None,
                                 confidence=0.9,
+                                page_width=page_width,
+                                page_height=page_height,
                             )
                         )
             page_text = " ".join(item.text for item in page_lines).strip()
             if len(page_text) < 20:
                 pixmap = page.get_pixmap(dpi=200, colorspace=pymupdf.csRGB)
                 image = Image.frombytes("RGB", [pixmap.width, pixmap.height], pixmap.samples)
-                page_lines = _ocr_image(image, page_index)
+                try:
+                    page_lines = _ocr_image(image, page_index)
+                except OcrEngineUnavailable as exc:
+                    raise OcrEngineUnavailable(page_count) from exc
             evidence.extend(page_lines)
     finally:
         document.close()
@@ -112,7 +145,10 @@ def _extract_pdf(content: bytes) -> tuple[list[TextEvidence], int, float]:
 def _extract_image(content: bytes) -> tuple[list[TextEvidence], int, float]:
     image = Image.open(BytesIO(content))
     try:
-        evidence = _ocr_image(image, 1)
+        try:
+            evidence = _ocr_image(image, 1)
+        except OcrEngineUnavailable as exc:
+            raise OcrEngineUnavailable(1) from exc
     finally:
         image.close()
     confidence = sum(item.confidence for item in evidence) / len(evidence) if evidence else 0.0
@@ -199,6 +235,8 @@ def _extract_fields(evidence: list[TextEvidence], document_type: DocumentType) -
                 "value_type": value_type,
                 "page": source.page,
                 "bbox": source.bbox,
+                "page_width": source.page_width,
+                "page_height": source.page_height,
                 "confidence": min(0.99, max(0.05, source.confidence + 0.03)),
                 "extractor": EXTRACTOR_VERSION,
             }
@@ -230,6 +268,8 @@ def _extract_fields(evidence: list[TextEvidence], document_type: DocumentType) -
                     "value_type": "DATE",
                     "page": item.page,
                     "bbox": item.bbox,
+                    "page_width": item.page_width,
+                    "page_height": item.page_height,
                     "confidence": min(0.99, max(0.05, item.confidence + 0.02)),
                     "extractor": EXTRACTOR_VERSION,
                 }
@@ -246,6 +286,8 @@ def _extract_fields(evidence: list[TextEvidence], document_type: DocumentType) -
                 "value_type": "NUMBER",
                 "page": evidence[0].page if evidence else None,
                 "bbox": evidence[0].bbox if evidence else None,
+                "page_width": evidence[0].page_width if evidence else None,
+                "page_height": evidence[0].page_height if evidence else None,
                 "confidence": 0.8,
                 "extractor": EXTRACTOR_VERSION,
             }
@@ -276,14 +318,27 @@ def _classification_confidence(text: str, expected: DocumentType) -> Decimal:
 
 
 def _build_extraction(content: bytes, mime_type: str, document_type: DocumentType):
-    if mime_type == "application/pdf":
-        evidence, page_count, ocr_confidence = _extract_pdf(content)
-    else:
-        evidence, page_count, ocr_confidence = _extract_image(content)
+    ocr_unavailable = False
+    try:
+        if mime_type == "application/pdf":
+            evidence, page_count, ocr_confidence = _extract_pdf(content)
+        else:
+            evidence, page_count, ocr_confidence = _extract_image(content)
+    except OcrEngineUnavailable as exc:
+        evidence, page_count, ocr_confidence = [], exc.page_count, 0.0
+        ocr_unavailable = True
     raw_text = "\n".join(item.text for item in evidence).strip()
     fields = _extract_fields(evidence, document_type) if raw_text else []
     confidence = Decimal(str(round(ocr_confidence, 3))) if evidence else Decimal("0.000")
-    if not raw_text:
+    if ocr_unavailable:
+        status = ExtractionStatus.FAILED
+        error_code = "OCR_ENGINE_UNAVAILABLE"
+        error_detail = (
+            "The OCR engine (Tesseract) is not installed on this server, so scanned or "
+            "image-only pages could not be read. This is a deployment issue, not a defect "
+            "in the uploaded document. Manual review is required."
+        )
+    elif not raw_text:
         status = ExtractionStatus.UNREADABLE
         error_code = "NO_TEXT"
         error_detail = "No machine-readable text could be extracted. Manual review is required."
@@ -363,6 +418,8 @@ def process_document_version(db: Session, version: DocumentVersion, *, force: bo
                     value_type=field["value_type"],
                     page=field["page"],
                     bbox=field["bbox"],
+                    page_width=field["page_width"],
+                    page_height=field["page_height"],
                     confidence=Decimal(str(round(field["confidence"], 3))),
                     extractor=field["extractor"],
                 )

@@ -35,7 +35,8 @@ async def issue_credential(req: IssueCredentialRequest):
         id_number=req.id_number
     )
     
-    # Compute signature proof
+    # Demo integrity tag, not a digital signature: HMAC-SHA256 with the shared
+    # application secret. The proof type says so instead of claiming Ed25519.
     sig_payload = f"{cred_id}:{req.holder_did}:{req.holder_name}:{req.degree_name}:{req.cgpa}:{now_str}"
     sig = hmac.new(
         settings.SECRET_KEY.encode("utf-8"),
@@ -44,11 +45,11 @@ async def issue_credential(req: IssueCredentialRequest):
     ).hexdigest()
     
     proof = W3CProof(
-        type="Ed25519Signature2020",
+        type="AstraDemoHmacIntegrity",
         created=now_str,
         proofPurpose="assertionMethod",
-        verificationMethod=f"did:gov:university#key-1",
-        proofValue=f"z{sig}"
+        verificationMethod=f"did:gov:university#demo-shared-secret",
+        proofValue=sig
     )
     
     vc = W3CVerifiableCredential(

@@ -1,7 +1,7 @@
 # Requirements Traceability — AstraVerify / AICTE Adaptation
 
-**Date:** 2026-10-24
-**Version:** 3.0 (post-implementation)
+**Date:** 2026-10-25
+**Version:** 3.1 (post-implementation; adds structured declaration and three-way consistency)
 **Sources:**
 1. Official SIH problem statement — *AI-Powered Application Validation, Document Authentication and Regulatory Compliance Verification* (supplied 2026-10-23).
 2. `IMPLEMENTATION_ROADMAP.md`.
@@ -19,11 +19,12 @@
 
 | Group | Count | Working | Partial | N/A |
 |---|---:|---:|---:|---:|
-| Official requirements (O1–O18) | 18 | 9 | 9 | 0 |
-| Implementation requirements (R1–R52) | 52 | 48 | 3 | 1 |
+| Official requirements (O1–O18) | 18 | 10 | 8 | 0 |
+| Implementation requirements (R1–R56) | 56 | 52 | 3 | 1 |
 | ZKP / blockchain (Z1–Z8, B1–B5) | 13 | 10 | 3 | 0 |
-| Cross-cutting (X1–X23) | 23 | 20 | 1 | 2 |
-| **Total** | **106** | **87** | **16** | **3** |
+| Cross-cutting (X1–X23) | 23 | 21 | 1 | 1 |
+| Post-MVP additions (M4–M6) | 3 | 3 | 0 | 0 |
+| **Total** | **113** | **96** | **15** | **2** |
 
 No official requirement is met through real AICTE integration. Working items are prototype capabilities proven against synthetic data, local PostgreSQL, local storage, a local Hardhat chain, and an automated pytest/contract suite.
 
@@ -36,8 +37,8 @@ No official requirement is met through real AICTE integration. Working items are
 | O1 | Identify category and applicable checklist | WORKING | EoA category; versioned checklist template snapshotted at application creation | Only EoA seeded |
 | O2 | Retrieve records from authorized AICTE systems | PARTIAL | `InstitutionRecord` model, synthetic `AICTE` adapter, frozen snapshots | No authorized AICTE source |
 | O3 | Validate fields/documents with OCR, classification, extraction | WORKING | Four OCR document types; evidence-linked extraction; validation rules | Classification is heuristic; declared type wins |
-| O4 | Identify missing, incomplete, expired, inconsistent items | WORKING | Versioned rules with `NOT_AVAILABLE`/`INCONCLUSIVE` | Synthetic rule definitions |
-| O5 | Structured report and rectification | PARTIAL | Findings, evidence, review actions, rectification state, APIs/UI | No formal PDF/CSV report export |
+| O4 | Identify missing, incomplete, expired, inconsistent items | WORKING | Versioned rules with `NOT_AVAILABLE`/`INCONCLUSIVE`; declared-vs-extracted-vs-record consistency rules | Synthetic rule definitions; declarations are applicant-supplied, not verified |
+| O5 | Structured report and rectification | WORKING | Findings, evidence, review actions, rectification state, alerts with dispositions, and an advisory JSON/Markdown/HTML report export (`GET /applications/{id}/report`) | No PDF renderer, no signature, no queued export; the report is a review aid, not an official AICTE document |
 | O6 | Alteration, duplication, metadata, identifier, date anomaly analysis | WORKING | Cross-application hash reuse, shared identifiers, PDF metadata heuristics | Heuristics are advisory, not calibrated against real labels |
 | O7 | Verify with issuing authorities; source/time/result; six states | PARTIAL | Adapter interface, six states, demo Ed25519 issuer, provenance | No real AICTE/issuer authority access; external adapter returns `SOURCE_UNAVAILABLE` |
 | O8 | Compare against configurable Handbook/regulatory checklists | PARTIAL | DB-backed versioned rule sets, activation, citations | Seeded thresholds/citations are synthetic; official sources not supplied |
@@ -83,8 +84,8 @@ No official requirement is met through real AICTE integration. Working items are
 | R8 | Process PDFs and images | WORKING | pdfplumber → PyMuPDF → Tesseract; explicit unreadable/failed states |
 | R9 | Classify document types | PARTIAL | Heuristic classification with confidence; never overrides declared type |
 | R10 | Extract fields, identifiers, dates, institution details | WORKING | Type-specific extractors and normalization |
-| R11 | Retain page, confidence, source evidence | WORKING | Page/bbox/snippet/confidence per evidence item |
-| R12 | Handle unreadable/missing/low confidence | WORKING | `UNREADABLE`, `LOW_CONFIDENCE`, `FAILED`; review visibility |
+| R11 | Retain page, confidence, source evidence | WORKING | Page/bbox/page dimensions/confidence per evidence item; `/compliance` renders the source page with the box drawn |
+| R12 | Handle unreadable/missing/low confidence | WORKING | `UNREADABLE`, `LOW_CONFIDENCE`, `FAILED`, `OCR_ENGINE_UNAVAILABLE`; review visibility |
 | R13 | Store document hashes and secure originals | WORKING | SHA-256 at intake; immutable versions; signed local downloads |
 | R14 | Measure extraction performance | WORKING | Synthetic harness: 100/100 fields, median 43.94 ms, p95 47.66 ms |
 
@@ -104,6 +105,12 @@ No official requirement is met through real AICTE integration. Working items are
 | R22 | Findings explain reason, evidence, rule, next action | WORKING | Finding + evidence records and review API |
 | R23 | Distinguish unavailable from failure | WORKING | `NOT_AVAILABLE`, `INCONCLUSIVE`, `NOT_APPLICABLE` |
 | R24 | Deterministic outcomes for known cases | WORKING | Rule fixtures and automated tests |
+| R53 | Structured applicant declaration (affiliation, programmes/intake, faculty count, previous approval) | WORKING | `application_declarations` (one row per application, versioned); `GET`/`PUT /applications/{id}/declaration`; draft-only, applicant-only, audited as `application.declaration_saved` |
+| R54 | Three-way consistency: declared affiliation vs extracted certificate | WORKING | `AFFILIATION_DECLARATION_MATCH` compares normalised number and validity date; `NOT_AVAILABLE` without declaration or extraction; mismatch is advisory `FAIL` |
+| R55 | Three-way consistency: declared programmes/intake vs synthetic records | WORKING | `PROGRAMME_DECLARATION_MATCH` flags declared programmes missing from records, intake differences on shared codes, and an inconsistent declared total |
+| R56 | Three-way consistency: declared faculty count vs synthetic records | WORKING | `FACULTY_COUNT_DECLARATION_MATCH` compares against synthetic `faculty_records` count within a configurable tolerance (default 0) |
+
+> R53–R56 were added after the initial matrix. The declaration is applicant-supplied and never verified by these rules: a match means two sources agree, a mismatch means a human should inspect both, and no rule changes application status.
 
 ---
 
@@ -112,12 +119,14 @@ No official requirement is met through real AICTE integration. Working items are
 | ID | Requirement | Status | Evidence |
 |---|---|---|---|
 | R25 | Separate integrity, authenticity, consistency | PARTIAL | Findings, issuer states, and anomaly signals are separate; no single unified authenticity verdict by design |
-| R26 | Verify QR codes and digital signatures | PARTIAL | Real Ed25519 verification and document-hash binding; QR decoding not implemented |
+| R26 | Verify QR codes and digital signatures | PARTIAL | Real Ed25519 verification and document-hash binding; `qr-payload` decodes QR payloads (OpenCV) but never fetches or resolves them; `pdf-signature` inspects signature/`ByteRange` structure without CMS, certificate, revocation, or trust-chain verification |
 | R27 | Adapter interface for authorized issuer APIs | WORKING | Adapter code, capability/status reporting, external unavailable path |
-| R28 | Record source, timestamp, response, result | WORKING | `IssuerVerification` with evidence and `simulated_source` |
+| R28 | Record source, timestamp, response, result | WORKING | `IssuerVerification` with adapter code, evidence, `simulated_source`, and inspection engine version |
 | R29 | Six verification states | WORKING | Enum enforced end to end |
 | R30 | Clearly labeled simulated issuer services | WORKING | Demo issuer named “Synthetic Demo Issuer (not AICTE)” and flagged |
 | R31 | Never present hash match as authenticity proof | WORKING | Wording rules, UI copy, and test assertions |
+
+> R26 stays **PARTIAL** after M3. Local QR decoding and PDF signature-structure inspection are implemented and tested, but the payload is never resolved against an authorised source and the CMS/certificate/revocation/trust chain is never verified. The API and UI state this limit on every result; no authenticity verdict is produced.
 
 ---
 
@@ -140,11 +149,19 @@ No official requirement is met through real AICTE integration. Working items are
 |---|---|---|---|
 | R38 | Search, filters, status summaries | WORKING | Reviewer queue, filters, dashboard counters |
 | R39 | Application-level review view | WORKING | Review overview API and `/compliance` case view |
-| R40 | Alerts | WORKING | Generated from findings/anomalies; dedupe and resolution |
+| R40 | Alerts | WORKING | Generated from findings/anomalies; unique `(application_id, alert_type, source_ref)`; staff dispositions (`FALSE_POSITIVE`/`ACCEPTED_RISK` require a note); stale finding/anomaly alerts auto-`SUPERSEDED` |
 | R41 | Notes, rectification, escalation, decisions | WORKING | Review-action APIs with rationale and audit |
 | R42 | Traceable history of rules, sources, actions | WORKING | Hash-chained `audit_events` |
 | R43 | Historical explainability against rule versions | WORKING | Immutable rule sets + validation run references |
 | R44 | Human control of final decisions | WORKING | Approver/admin-only decision endpoint; advisory system |
+
+### 8.1 Post-MVP additions
+
+| ID | Requirement | Status | Evidence |
+|---|---|---|---|
+| M4 | Advisory report export and alert dispositions | WORKING | `GET /applications/{id}/report?format=json|markdown|html` (`application-report-1.0`, every export audited as `application.report_exported`); dispositions stored in `alerts.payload`; stale alerts auto-superseded; `/compliance` export buttons and alert panel. No PDF/signature/presigned artefact; the report is never an AICTE decision. |
+| M5 | Read-only pre-submission self-check | WORKING | `GET /applications/{id}/self-check` (`self-check-1.0`) for `DRAFT`/`RECTIFICATION_REQUESTED`; blocking parity with `missing_required_items`, no writes; `/compliance` self-check panel. Advisory preview only: it does not run the rule engine and does not predict approval. |
+| M6 | Demo hardening and evaluation | WORKING | `backend/scripts/demo_smoke.py` (live-HTTP walkthrough), `docs/DEMO_RUNBOOK.md` (script + safe phrasing + troubleshooting), advisory-controls section in `evaluation/run_evaluation.py` (39 checks incl. gate parity, report claim safety, disposition gating, supersede), dependency pins reconciled for Python 3.10. Still no browser automation or CI. |
 
 ---
 
@@ -205,8 +222,10 @@ These remain in the repository for historical reasons and **must not be presente
 | Component | State | Rule |
 |---|---|---|
 | `services/deepfake.py`, `services/risk.py` | Hardcoded stubs | Not used by new validation |
-| `Wallet/ImportOptions.jsx`, `digilocker.py` | Simulated upload/DigiLocker | Legacy routes only; labelled simulations |
-| `attestation.py` | HMAC-SHA256 labelled `Ed25519Signature2020` | Not used by new issuer flow |
+| `Wallet/ImportOptions.jsx`, `digilocker.py` | Simulated upload/DigiLocker; proofs are `AstraSimulatedProof` placeholders | Legacy routes only; labelled simulations |
+| `attestation.py` | Real Ed25519 over the canonical payload, honestly typed `AstraEd25519Signature`; demo key derived from config, not a published DID, not W3C Data Integrity | Not used by new issuer flow; covered by `test_legacy_attestation.py` |
+| `routers/issuer.py` | HMAC-SHA256 integrity tag, typed `AstraDemoHmacIntegrity` | Legacy route only; not a signature |
+| Legacy wallet routers (`upload`, `digilocker`, `issuer`, `verify`, `verifier`) | Unmounted unless `LEGACY_API_ENABLED=true` | Off by default |
 | legacy `validate-zk` | Does not verify proofs | Not used by new flow |
 | `circuits/range_proof.circom` | Unsound | Disabled; `ZKP_ALLOW_LEGACY_CIRCUIT=false` |
 | `AstraVerifyAnchor.sol` | Legacy contract | V2 contract is used for new anchoring |
@@ -223,6 +242,7 @@ These remain in the repository for historical reasons and **must not be presente
 6. **No encryption-at-rest/retention job.** S3/MinIO is supported by configuration; field-level encryption and automated retention are absent.
 7. **No CI/browser E2E.** Backend, contract, build, and one live anchor flow were run manually; `/compliance` was build-verified but not browser-automated.
 8. **Synthetic metrics only.** Any measured performance describes the generated corpus and must be labelled as such.
+9. **Declarations are unverified input.** The structured declaration (R53–R56) is applicant-supplied. Consistency rules only compare sources; they cannot detect a declaration that agrees with a wrong document or record, and the previous-approval reference is stored but not compared.
 
 ---
 
@@ -240,4 +260,4 @@ These remain in the repository for historical reasons and **must not be presente
 | 8 | Reviewer actions, attributable decisions, audit, human control | Met; phase tests |
 | 9 | Unauthorized blocked, malformed files safe, no committed secrets, logging | Met; 7 security tests |
 | 10 | Core flows, reproducible findings, measured metrics, limitations | Met; 61-test suite + synthetic evaluation |
-| 11 | Reliable demo, simulations disclosed, claims supported | Documentation/demo completed; no browser automation/CI |
+| 11 | Reliable demo, simulations disclosed, claims supported | Documentation/demo completed; no browser automation/CI. Post-MVP hardening: M0 credibility containment, M1 evidence viewer, M2 structured declaration + three-way consistency, M3 QR/PDF-signature inspection, M4 report export + alert dispositions, M5 self-check, and M6 demo runbook + live walkthrough + advisory-control evaluation complete (86-test suite; no new migrations) |

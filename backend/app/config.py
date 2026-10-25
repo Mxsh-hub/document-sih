@@ -81,6 +81,11 @@ class Settings(BaseSettings):
     SECRET_KEY: str = os.getenv("SECRET_KEY", "astraverify-super-secret-attestation-key-2026")
     ISSUER_DID: str = "did:web:astraverify.in"
 
+    # Legacy consumer-wallet API surface (upload/digilocker/issuer/verify/verifier).
+    # Disabled by default: these routes predate the compliance workflow, are unauthenticated,
+    # and must not be presented as part of the AICTE prototype.
+    LEGACY_API_ENABLED: bool = os.getenv("LEGACY_API_ENABLED", "false").lower() in {"1", "true", "yes"}
+
     @property
     def cors_origins(self) -> list[str]:
         return [o.strip() for o in self.CORS_ORIGINS.split(",") if o.strip()]
