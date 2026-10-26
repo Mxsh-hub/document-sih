@@ -270,6 +270,80 @@ Roles: APPLICANT (own; `justification` only), REVIEWER/APPROVER (status `WAIVED`
 
 `WAIVED` requires a rationale and writes an audit event.
 
+### `GET /applications/{id}/self-check`
+
+Roles: any user who can view the application; the natural caller is the applicant. `409 STATE_CONFLICT` unless the application is `DRAFT` or `RECTIFICATION_REQUESTED`.
+
+Read-only pre-submission preview (`self-check-1.0`). It writes nothing — no validation run, no alerts, no audit event — and returns:
+
+```json
+{
+  "application_id": "6a2f...",
+  "reference_no": "APP-2026-000001",
+  "status": "DRAFT",
+  "check_version": "self-check-1.0",
+  "generated_at": "2026-10-25T09:15:00Z",
+  "can_submit": false,
+  "counts": {"BLOCKING": 1, "WARNING": 2, "INFO": 1, "OK": 0},
+  "checks": [
+    {
+      "code": "CHECKLIST_MISSING:AFFILIATION_CERTIFICATE",
+      "level": "BLOCKING",
+      "title": "Affiliation/recognition certificate",
+      "message": "This required checklist item has no accepted document and no justification. Submission is blocked while it is incomplete.",
+      "remediation": "Upload an accepted document for this item, or record a justification.",
+      "details": {"checklist_code": "AFFILIATION_CERTIFICATE", "accepted_document_types": ["AFFILIATION_CERTIFICATE"]}
+    }
+  ],
+  "advisory_note": "This self-check previews whether submission would be accepted and highlights likely findings. ..."
+}
+```
+
+`can_submit` is `true` only when no required checklist item is missing. Blocking checks are exactly the items the `missing_required_items` helper returns, the same list `submit` enforces, so the preview cannot disagree with the real gate. Warnings and info are guidance only: rejected/unversioned documents outside the checklist gate, extraction problems, a missing/incomplete declaration, findings from the latest validation run, anomaly signals, and unavailable technical inspection. The self-check never runs the rule engine and never predicts approval.
+
+### `GET /applications/{id}/declaration`
+
+Roles: any user who can view the application (applicant of the institution, or staff/admin/auditor per the normal scope). Returns the applicant's declared facts or `null`:
+
+```json
+{
+  "application_id": "6a2f...",
+  "declaration": {
+    "id": "8b1c...",
+    "application_id": "6a2f...",
+    "affiliation_number": "AFF/2026/001",
+    "affiliation_valid_until": "2031-03-31",
+    "programmes": [{"code": "CSE", "name": "B.Tech Computer Science and Engineering", "level": "UG", "intake": 120}],
+    "total_intake": 180,
+    "faculty_count": 2,
+    "previous_approval_reference": "APP-2025-000421",
+    "version": 2,
+    "declared_by": "u3...",
+    "created_at": "2026-10-25T09:00:00Z",
+    "updated_at": "2026-10-25T09:14:00Z"
+  }
+}
+```
+
+`declaration` is `null` until the applicant saves one; the three declaration-consistency rules then report `NOT_AVAILABLE`.
+
+### `PUT /applications/{id}/declaration`
+
+Roles: APPLICANT (own institution) and only while the application is `DRAFT`; staff receive `403`, non-draft states `409`. Body:
+
+```json
+{
+  "affiliation_number": "AFF/2026/001",
+  "affiliation_valid_until": "2031-03-31",
+  "programmes": [{"code": "CSE", "name": "B.Tech Computer Science and Engineering", "level": "UG", "intake": 120}],
+  "total_intake": 180,
+  "faculty_count": 2,
+  "previous_approval_reference": "APP-2025-000421"
+}
+```
+
+Upsert semantics: `200` with the saved declaration; `version` increments on each save and an `application.declaration_saved` audit event records changed field names. Programme codes are upper-cased, trimmed, and de-duplicated. Declared values are applicant-supplied and are not verified by this endpoint.
+
 ### `GET /applications/{id}/summary`
 
 Dashboard projection:
@@ -292,12 +366,13 @@ Dashboard projection:
 
 Returns `application_status_history` rows.
 
-### Reports
+### Reports (implemented)
 
-`POST /applications/{id}/reports` (REVIEWER/APPROVER/ADMIN) body `{"format": "PDF"|"JSON", "validation_run_id": "..."}`
-→ `202 {"report_id": "...", "status": "QUEUED"}`.
+`GET /applications/{id}/report?format=json|markdown|html` — REVIEWER/APPROVER/ADMIN/AUDITOR, scoped like `review-overview`; applicants receive `403`. Returns the report body directly as an attachment (`Content-Disposition: attachment; filename="<reference_no>-report.<ext>"`); `format` defaults to `json`.
 
-`GET /reports/{id}` → `{"id", "status", "format", "sha256", "download_url", "expires_at"}`. `download_url` is a short-lived presigned URL. `JSON` reports embed findings/evidence; `PDF` is generated from the same immutable run.
+The report is a single synchronous render from current records (`application-report-1.0`): application summary, structured declaration (labelled applicant-supplied), checklist, documents and extraction status, latest validation run with findings and evidence metadata, technical inspections, issuer verifications, anomaly signals, infrastructure assessment, alerts with dispositions, review actions, decisions, and audit chain status. Every format embeds a `limitations` list stating that findings, anomalies, QR payloads, and signature structures are advisory, that issuer data is synthetic, and that the export is not an AICTE decision or certificate. Each export writes an `application.report_exported` audit event with the format.
+
+There is no PDF renderer and no signature: an exported file is never a signed artefact. The earlier queued-report design (`POST /reports` → `GET /reports/{id}` with presigned download) is **not** implemented.
 
 ---
 
@@ -373,13 +448,17 @@ Metadata + processing status + extraction summary.
       "value_type": "TEXT",
       "page": 1,
       "bbox": [120, 240, 480, 268],
+      "page_width": 595.0,
+      "page_height": 842.0,
       "confidence": 0.91
     }
   ]
 }
 ```
 
-If processing failed, `status` is `FAILED`/`UNREADABLE` and `error_code` is set; fields may be empty.
+`page_width`/`page_height` describe the coordinate space of `bbox`: PDF text-layer boxes are in PDF points, OCR'd raster boxes are in pixels of the rasterised page. Clients need both to place a highlight on the rendered page.
+
+If processing failed, `status` is `FAILED`/`UNREADABLE` and `error_code` is set; fields may be empty. `OCR_ENGINE_UNAVAILABLE` means the server's Tesseract binary is missing (a deployment problem), distinct from `NO_TEXT` (the document itself has no readable text).
 
 ### `POST /document-versions/{id}/reprocess`
 
@@ -560,36 +639,90 @@ Roles: REVIEWER/APPROVER/ADMIN/AUDITOR. Returns adapter capabilities:
 
 ### `POST /document-versions/{id}/issuer-verifications`
 
-Roles: REVIEWER/APPROVER/ADMIN. Body `{"adapter": "synthetic-affiliation-board"}` (optional; server selects by type). `202`:
+Roles: REVIEWER/APPROVER/ADMIN. Body:
 
 ```json
-{"id": "iv1...", "status": "PENDING", "adapter": "synthetic-affiliation-board", "simulated": true}
+{"issuer_code": "demo", "credential_id": "urn:uuid:..."}
 ```
 
-### `GET /document-versions/{id}/issuer-verifications`
+`issuer_code` is `demo` (default) or `external`; `credential_id` is optional and defaults to the newest active synthetic credential for the version. `201` returns an `IssuerVerificationOut`:
 
 ```json
 {
-  "items": [
-    {
-      "id": "iv1...",
-      "adapter": "synthetic-affiliation-board",
-      "source": "Synthetic affiliation registry",
-      "simulated": true,
-      "status": "MISMATCH",
-      "retrieved_at": "2026-10-23T09:20:00Z",
-      "verified_fields": {"institution_name": {"submitted": "Example Institute", "source": "Example Institute of Technology"}},
-      "response_ref": "synthetic://affiliation/2026/001"
-    }
-  ]
+  "id": "iv1...",
+  "document_version_id": "dv1...",
+  "issuer_credential_id": "ic1...",
+  "adapter_code": "demo",
+  "status": "VERIFIED",
+  "message": "Ed25519 signature and document hash verified against the synthetic demo issuer key. This is not an AICTE or external issuer confirmation.",
+  "evidence": {"synthetic": true, "document_sha256_match": true},
+  "simulated_source": true,
+  "verified_by": "u1...",
+  "created_at": "2026-10-25T09:20:00Z"
 }
 ```
 
-Statuses: `VERIFIED`, `MISMATCH`, `EXPIRED`, `PENDING`, `SOURCE_UNAVAILABLE`, `MANUAL_REVIEW`.
+`issuer_code=external` records `SOURCE_UNAVAILABLE` with `simulated_source: true`; no external source is configured.
 
-### `GET /issuer-verifications/{id}`
+### `POST /document-versions/{id}/technical-verifications`
 
-Full result + response summary + evidence reference. Raw external responses are stored as `response_summary`; no unbounded payloads are echoed.
+Roles: REVIEWER/APPROVER/ADMIN. PDF and image versions only; other media types return `400 UNSUPPORTED_MEDIA_TYPE`. Runs local advisory inspection and records one row per adapter (`qr-payload`, image/PDF; `pdf-signature`, PDF only). `201` returns a list of `IssuerVerificationOut` rows:
+
+```json
+[
+  {
+    "adapter_code": "qr-payload",
+    "status": "SOURCE_UNAVAILABLE",
+    "message": "A QR payload was detected but was not resolved against any authorised source. ... no URL was fetched and no authenticity claim is made.",
+    "evidence": {
+      "state": "QR_PAYLOAD_DETECTED_UNVERIFIED",
+      "engine_version": "technical-inspection-1.0",
+      "advisory_only": true,
+      "cryptographically_verified": false,
+      "external_lookup_performed": false,
+      "pages_scanned": 1,
+      "payload_count": 1,
+      "payloads": [
+        {
+          "page": 1,
+          "payload_preview": "https://verify.example.test/d/ABC123",
+          "payload_sha256": "...",
+          "payload_length": 41,
+          "is_url": true,
+          "scheme": "https",
+          "host": "verify.example.test",
+          "not_fetched": true
+        }
+      ]
+    },
+    "simulated_source": false
+  },
+  {
+    "adapter_code": "pdf-signature",
+    "status": "SOURCE_UNAVAILABLE",
+    "evidence": {
+      "state": "PDF_SIGNATURE_PRESENT_UNVERIFIED",
+      "covers_whole_document": true,
+      "coverage_ratio": 0.94,
+      "residual_bytes": 2048,
+      "signature_fields": {"signer_name": "...", "signing_time": "...", "filters": ["Adobe.PPKLite"]},
+      "cryptographically_verified": false,
+      "trust_chain_checked": false,
+      "revocation_checked": false
+    }
+  }
+]
+```
+
+Evidence `state` values and their status mapping are normative in `docs/ARCHITECTURE.md` §6.10. In short: `NOT_FOUND` for absence, `SOURCE_UNAVAILABLE` for present-but-unverified or decoder-unavailable, `MISMATCH` for incomplete signature byte-range coverage, `ERROR` for inspection failure. The endpoint never fetches QR payloads and never verifies PDF signature cryptography.
+
+### `GET /document-versions/{id}/issuer-verifications`
+
+Returns the full verification history (latest first) for the version, including issuer checks and technical inspections.
+
+### `GET /applications/{id}/review-overview`
+
+Also returns `technical_verifications`: the newest inspection row per `(document_version_id, adapter_code)`. The full history stays available through the endpoint above.
 
 ### Demo credential issuance (not a real issuer)
 
@@ -758,6 +891,28 @@ The disclaimer is mandatory in both API and UI. Hash convention: documents ancho
 
 Roles: REVIEWER/APPROVER/ADMIN. Query: `status`, `severity`, `assigned_to_me`, `q`, `page`, `page_size`. Returns applications with open alert counts and highest severity.
 
+### `GET /applications/{id}/review-overview`
+
+Roles: REVIEWER/APPROVER/ADMIN/AUDITOR (applicants cannot call it). One read that the compliance console renders: application summary, checklist, documents, latest validation run with findings and their evidence, infrastructure assessment, actions, alerts, and decisions.
+
+`documents[]` entries carry what a viewer needs to open the stored file:
+
+```json
+{
+  "id": "d2...",
+  "document_type": "AFFILIATION_CERTIFICATE",
+  "status": "PROCESSED",
+  "current_version_id": "v4...",
+  "original_filename": "affiliation_2026.pdf",
+  "mime_type": "application/pdf",
+  "created_at": "2026-10-25T09:12:44Z"
+}
+```
+
+`latest_validation_run.findings[].evidence[].metadata_json` carries the extraction provenance used to highlight a finding in the document: `document_id`, `document_version_id`, `field`, `page`, `bbox`, `page_width`, `page_height`, `confidence`. Evidence is advisory: a located box does not establish authenticity.
+
+The response also includes `declaration` (the same object as `GET /applications/{id}/declaration`, or `null`) so reviewers can compare declared values with extracted fields and synthetic records without a second call. Declaration-based findings use evidence types `DECLARATION` (applicant-supplied facts, `advisory: true`) and `RECORD` (synthetic institutional records); certificate comparisons also carry `EXTRACTED_FIELD` evidence with page geometry.
+
 ### `POST /applications/{id}/assign`
 
 Roles: REVIEWER (self-assign only if unassigned), APPROVER/ADMIN (any reviewer). Body `{"reviewer_id": "..."}`. `200`. Audited.
@@ -804,11 +959,15 @@ Case viewers. Returns the final decision (if any).
 
 | Method | Path | Roles | Purpose |
 |---|---|---|---|
-| `GET` | `/alerts` | REVIEWER/APPROVER/ADMIN/AUDITOR | List, filter `status`, `severity`, `application_id` |
-| `POST` | `/alerts/{id}/acknowledge` | REVIEWER/APPROVER/ADMIN | `200`; records actor/time |
-| `POST` | `/alerts/{id}/resolve` | REVIEWER/APPROVER/ADMIN | Body `{"resolution": "..."}`; `200` |
+| `GET` | `/alerts` | REVIEWER/APPROVER/ADMIN/AUDITOR | List, filter `status`, `alert_type`, `application_id` |
+| `GET` | `/applications/{id}/alerts` | Any viewer of the application | Alerts for one application, optional `status` |
+| `GET` | `/alerts/{id}` | REVIEWER/APPROVER/ADMIN/AUDITOR | Alert detail; `404` when the alert's application is outside the caller's scope |
+| `POST` | `/alerts/{id}/acknowledge` | REVIEWER/APPROVER/ADMIN | `200`; records actor/time; `409` when already resolved |
+| `POST` | `/alerts/{id}/resolve` | REVIEWER/APPROVER/ADMIN | Body `{"disposition": "...", "note": "..."}`; `200` |
 
-Alerts are deduplicated by a deterministic `dedupe_key`; revalidation does not create duplicates.
+`disposition` is one of `ADDRESSED` (default), `FALSE_POSITIVE`, `DUPLICATE`, `SUPERSEDED`, `ACCEPTED_RISK`, `ESCALATED`. `FALSE_POSITIVE` and `ACCEPTED_RISK` require a non-blank `note` (`400 VALIDATION_FAILED`). The disposition and note are stored in the alert's `payload` and written to the `alert.resolved` audit event; `AlertOut.disposition` exposes the stored value.
+
+Alerts are unique on `(application_id, alert_type, source_ref)`. Findings and anomaly signals get new row IDs on each validation run, so `sync_alerts` resolves alerts whose source is no longer in the latest run as `SUPERSEDED` with `resolved_by = null` and an `alert.superseded` audit event. Human-created rectification and escalation alerts are never auto-resolved. A disposition is human judgement only: it never changes a finding outcome and never rejects an application.
 
 ---
 
@@ -957,6 +1116,7 @@ Invalid transitions return `409 STATE_CONFLICT`. Every transition is audited wit
 5. A missing document for a required item yields `FAIL`; an expired document yields `FAIL`; an absent institutional record yields `NOT_AVAILABLE` (never `PASS`).
 6. Re-running validation never mutates an earlier run; it appends a new run and new findings.
 7. Findings are advisory. The API never returns a field named `forged`, `authentic`, or `guilty`; it returns signals and statuses.
+8. Three-way consistency rules (`AFFILIATION_DECLARATION_MATCH`, `PROGRAMME_DECLARATION_MATCH`, `FACULTY_COUNT_DECLARATION_MATCH`) compare applicant-declared values with extracted document fields and/or synthetic records. Without a saved declaration they return `NOT_AVAILABLE`; a mismatch is `FAIL` with the compared values in `details` (`declared`, `extracted`, `mismatches`, or `declared_codes`/`record_codes`/`intake_mismatches`). They never auto-reject or label a declaration as false.
 
 ---
 

@@ -44,7 +44,28 @@ export default function ProofValidator() {
       // 4. Blockchain Verification (ethers)
       if (docHash && ethers) {
         try {
-          if (!window.ethereum) throw new Error("Please install MetaMask to verify proofs on the live network.");
+          if (!window.ethereum) throw new Error("Please install MetaMask to verify proofs.");
+          
+          // Auto-switch / Add Hardhat Localhost network (Chain ID: 31337 / 0x7a69)
+          try {
+            await window.ethereum.request({
+              method: 'wallet_switchEthereumChain',
+              params: [{ chainId: '0x7a69' }]
+            });
+          } catch (switchError) {
+            if (switchError.code === 4902 || switchError.message?.includes('Unrecognized')) {
+              await window.ethereum.request({
+                method: 'wallet_addEthereumChain',
+                params: [{
+                  chainId: '0x7a69',
+                  chainName: 'Hardhat Localhost',
+                  rpcUrls: ['http://127.0.0.1:8545'],
+                  nativeCurrency: { name: 'ETH', symbol: 'ETH', decimals: 18 }
+                }]
+              });
+            }
+          }
+
           await window.ethereum.request({ method: 'eth_requestAccounts' });
           const provider = new ethers.BrowserProvider(window.ethereum);
           const signer = await provider.getSigner();

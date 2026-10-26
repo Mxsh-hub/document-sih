@@ -136,7 +136,7 @@ def _verify_signature(credential: IssuedCredential, key: IssuerKey) -> bool:
         return False
 
 
-def _record_verification(
+def record_verification(
     db: Session,
     *,
     version: DocumentVersion,
@@ -202,7 +202,7 @@ def verify_demo_credential(
             .limit(1)
         )
     if credential is None:
-        return _record_verification(
+        return record_verification(
             db,
             version=version,
             adapter_code="demo",
@@ -222,7 +222,7 @@ def verify_demo_credential(
         "document_version_id": str(version.id),
     }
     if key is None or not _verify_signature(credential, key):
-        return _record_verification(
+        return record_verification(
             db,
             version=version,
             adapter_code="demo",
@@ -234,7 +234,7 @@ def verify_demo_credential(
             actor=actor,
         )
     if credential.status is not CredentialStatus.ACTIVE:
-        return _record_verification(
+        return record_verification(
             db,
             version=version,
             adapter_code="demo",
@@ -246,7 +246,7 @@ def verify_demo_credential(
             actor=actor,
         )
     if credential.expires_at and credential.expires_at < datetime.now(timezone.utc):
-        return _record_verification(
+        return record_verification(
             db,
             version=version,
             adapter_code="demo",
@@ -258,7 +258,7 @@ def verify_demo_credential(
             actor=actor,
         )
     if credential.document_sha256 != version.sha256:
-        return _record_verification(
+        return record_verification(
             db,
             version=version,
             adapter_code="demo",
@@ -269,7 +269,7 @@ def verify_demo_credential(
             credential=credential,
             actor=actor,
         )
-    return _record_verification(
+    return record_verification(
         db,
         version=version,
         adapter_code="demo",
@@ -288,7 +288,7 @@ def verify_external_issuer(
     version: DocumentVersion,
     actor: User | None,
 ) -> IssuerVerification:
-    return _record_verification(
+    return record_verification(
         db,
         version=version,
         adapter_code="external-simulated",

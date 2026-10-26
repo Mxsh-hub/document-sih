@@ -1,7 +1,12 @@
 import React, { useEffect, useState } from 'react';
-import { CheckCircle2, FileUp, Loader2, LockKeyhole, RefreshCw, Send, ShieldCheck, XCircle } from 'lucide-react';
+import { CheckCircle2, Download, FileUp, Loader2, LockKeyhole, RefreshCw, Send, ShieldCheck, XCircle } from 'lucide-react';
+import { api, downloadFile } from '../lib/api';
+import AlertPanel from './compliance/AlertPanel';
+import DeclarationForm from './compliance/DeclarationForm';
+import EvidenceWorkspace from './compliance/EvidenceWorkspace';
+import SelfCheckPanel from './compliance/SelfCheckPanel';
+import VerificationTools from './compliance/VerificationTools';
 
-const API_BASE = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000';
 const ACCOUNTS = [
   ['applicant@example.test', 'Applicant'],
   ['reviewer@example.test', 'Reviewer'],
@@ -9,22 +14,6 @@ const ACCOUNTS = [
   ['admin@example.test', 'Admin'],
   ['auditor@example.test', 'Auditor'],
 ];
-
-async function api(path, { token, method = 'GET', body, form } = {}) {
-  const headers = {};
-  if (token) headers.Authorization = `Bearer ${token}`;
-  if (body !== undefined) headers['Content-Type'] = 'application/json';
-  const response = await fetch(`${API_BASE}${path}`, {
-    method,
-    headers,
-    body: form || (body !== undefined ? JSON.stringify(body) : undefined),
-  });
-  const text = await response.text();
-  let data = null;
-  try { data = text ? JSON.parse(text) : null; } catch { data = { raw: text }; }
-  if (!response.ok) throw new Error(`${response.status}: ${data?.error?.message || data?.detail || response.statusText}`);
-  return data;
-}
 
 function Badge({ value }) {
   const good = ['PASS', 'VERIFIED', 'APPROVED'].includes(value);
@@ -50,6 +39,7 @@ export default function CompliancePortal() {
   const [cgpa, setCgpa] = useState('8.5');
   const [note, setNote] = useState('Synthetic demo review action.');
   const [rationale, setRationale] = useState('Synthetic demo decision after human review.');
+  const [selfCheckKey, setSelfCheckKey] = useState(0);
 
   const token = auth?.access_token;
   const role = auth?.user?.role || '';
@@ -116,7 +106,9 @@ export default function CompliancePortal() {
     form.append('document_type', item.accepted_document_types[0]);
     form.append('checklist_item_id', item.id);
     await api(`/api/v1/applications/${selectedId}/documents`, { token, method: 'POST', form });
-    await loadDetail(); setNotice(`Uploaded evidence for ${item.title}. Server-side extraction and validation completed.`);
+    await loadDetail();
+    setSelfCheckKey((key) => key + 1);
+    setNotice(`Uploaded evidence for ${item.title}. Server-side extraction and validation completed.`);
   });
 
   const submit = () => run('submit', async () => {
@@ -161,6 +153,14 @@ export default function CompliancePortal() {
     setNotice(chain.valid ? 'Audit hash chain is valid.' : `Audit chain broken at sequence ${chain.broken_sequence}.`);
   });
 
+  const exportReport = (format) => run(`export-${format}`, async () => {
+    const filename = await downloadFile(`/api/v1/applications/${selectedId}/report?format=${format}`, {
+      token,
+      fallbackName: `application-report.${format === 'markdown' ? 'md' : format}`,
+    });
+    setNotice(`Exported advisory ${format} report as ${filename}. It is a review aid, not a signed or official document.`);
+  });
+
   if (!auth) {
     return (
       <div className="max-w-xl mx-auto neo-box p-8 bg-card">
@@ -184,8 +184,6 @@ export default function CompliancePortal() {
       </div>
     );
   }
-
-  const findings = overview?.latest_validation_run?.findings || [];
 
   return (
     <div className="space-y-6">
@@ -221,15 +219,42 @@ export default function CompliancePortal() {
         <main className="space-y-6">
           {detail && <div className="neo-box p-5 bg-card"><div className="flex flex-wrap justify-between gap-2"><div><h2 className="text-2xl font-bold">{detail.reference_no}</h2><p className="font-mono text-sm">{detail.category_code} · {detail.cycle}</p></div><Badge value={detail.status} /></div><p className="font-mono text-xs mt-2">Synthetic institution: {detail.institution?.name || detail.institution_id}</p>{role === 'APPLICANT' && <button onClick={submit} disabled={busy === 'submit'} className="neo-button bg-primary text-primary-foreground px-4 py-2 font-bold flex items-center gap-2 mt-4"><Send size={16} /> Submit for validation</button>}</div>}
 
+          {detail && <DeclarationForm
+            key={detail.id}
+            applicationId={detail.id}
+            token={token}
+            editable={role === 'APPLICANT' && detail.status === 'DRAFT'}
+            onSaved={async (saved) => {
+              await loadDetail();
+              setSelfCheckKey((key) => key + 1);
+              setNotice(`Declaration v${saved.version} saved. Declared values are not verified; validation compares them with documents and synthetic records.`);
+            }}
+          />}
+
+          {detail && role === 'APPLICANT' && ['DRAFT', 'RECTIFICATION_REQUESTED'].includes(detail.status) && (
+            <SelfCheckPanel applicationId={detail.id} token={token} refreshKey={selfCheckKey} />
+          )}
+
           {checklist.length > 0 && <div className="neo-box p-5 bg-card"><h3 className="text-xl font-bold">Evidence checklist</h3><div className="mt-3 space-y-2">{checklist.map((item) => <div key={item.id} className="border-2 border-border p-3 flex flex-wrap gap-3 justify-between items-center"><div><div className="font-bold">{item.title}</div><div className="text-xs font-mono">{item.code} · {item.accepted_document_types.join(', ')}</div></div><div className="flex items-center gap-3"><Badge value={item.status} />{role === 'APPLICANT' && <label className="neo-button bg-accent text-accent-foreground px-3 py-1.5 font-bold cursor-pointer flex items-center gap-2"><FileUp size={16} /> Upload<input type="file" className="hidden" accept=".pdf,.png,.jpg,.jpeg" onChange={(e) => e.target.files[0] && upload(item, e.target.files[0])} /></label>}</div></div>)}</div></div>}
 
           {selectedId && <div className="neo-box p-5 bg-card space-y-3"><h3 className="text-xl font-bold flex items-center gap-2"><ShieldCheck size={20} /> Faculty eligibility threshold proof</h3><p className="text-sm font-mono">Sound Groth16 circuit · server-issued challenge · pinned verification key.</p><div className="flex flex-wrap gap-2 items-end"><label className="font-bold">CGPA (0–10)<input value={cgpa} onChange={(e) => setCgpa(e.target.value)} className="block border-2 border-border p-2 w-28 font-mono" /></label><button onClick={createProof} disabled={busy === 'proof'} className="neo-button bg-primary text-primary-foreground px-4 py-2 font-bold">{busy === 'proof' ? 'Proving…' : 'Generate and verify proof'}</button></div>{proofs.map((proof) => <div key={proof.id} className="border-2 border-border p-2 text-xs font-mono break-all"><Badge value={proof.status} /> commitment {proof.commitment.slice(0, 24)}… · nullifier {proof.nullifier.slice(0, 24)}… · chain {proof.chain_status}</div>)}<p className="text-xs font-mono">The proof establishes the committed private value meets the threshold. It does not prove the value is true or that the applicant is the real credential holder.</p></div>}
 
-          {role !== 'APPLICANT' && selectedId && <div className="neo-box p-5 bg-card space-y-3"><div className="flex flex-wrap justify-between gap-2 items-center"><h3 className="text-xl font-bold">Human review</h3><button onClick={loadReview} className="neo-button border-2 border-border px-3 py-1.5 font-bold">Load review overview</button></div><textarea value={note} onChange={(e) => setNote(e.target.value)} className="w-full border-2 border-border p-2 font-mono text-sm" rows={2} /><div className="flex flex-wrap gap-2"><button onClick={() => action('ASSIGN')} className="neo-button border-2 border-border px-3 py-1.5 font-bold">Assign to me</button><button onClick={() => action('NOTE')} className="neo-button border-2 border-border px-3 py-1.5 font-bold">Add note</button><button onClick={() => action('REQUEST_RECTIFICATION')} className="neo-button border-2 border-border px-3 py-1.5 font-bold">Request rectification</button><button onClick={verifyAudit} className="neo-button border-2 border-border px-3 py-1.5 font-bold">Verify audit chain</button></div>{(role === 'APPROVER' || role === 'ADMIN') && <div className="border-t-2 border-border pt-3 space-y-2"><textarea value={rationale} onChange={(e) => setRationale(e.target.value)} className="w-full border-2 border-border p-2 font-mono text-sm" rows={2} /><div className="flex gap-2"><button onClick={() => decide('APPROVE')} className="neo-button bg-emerald-600 text-white px-3 py-1.5 font-bold flex items-center gap-1"><CheckCircle2 size={16} /> Approve</button><button onClick={() => decide('REJECT')} className="neo-button bg-red-600 text-white px-3 py-1.5 font-bold flex items-center gap-1"><XCircle size={16} /> Reject</button></div></div>}</div>}
+          {role !== 'APPLICANT' && selectedId && <div className="neo-box p-5 bg-card space-y-3"><div className="flex flex-wrap justify-between gap-2 items-center"><h3 className="text-xl font-bold">Human review</h3><div className="flex flex-wrap items-center gap-2"><span className="font-mono text-[10px] text-muted-foreground">Export advisory report:</span><button onClick={() => exportReport('json')} disabled={busy === 'export-json'} className="neo-button border-2 border-border px-3 py-1.5 font-bold flex items-center gap-1"><Download size={14} /> JSON</button><button onClick={() => exportReport('markdown')} disabled={busy === 'export-markdown'} className="neo-button border-2 border-border px-3 py-1.5 font-bold flex items-center gap-1"><Download size={14} /> Markdown</button><button onClick={() => exportReport('html')} disabled={busy === 'export-html'} className="neo-button border-2 border-border px-3 py-1.5 font-bold flex items-center gap-1"><Download size={14} /> HTML</button><button onClick={loadReview} className="neo-button border-2 border-border px-3 py-1.5 font-bold">Load review overview</button></div></div><textarea value={note} onChange={(e) => setNote(e.target.value)} className="w-full border-2 border-border p-2 font-mono text-sm" rows={2} /><div className="flex flex-wrap gap-2"><button onClick={() => action('ASSIGN')} className="neo-button border-2 border-border px-3 py-1.5 font-bold">Assign to me</button><button onClick={() => action('NOTE')} className="neo-button border-2 border-border px-3 py-1.5 font-bold">Add note</button><button onClick={() => action('REQUEST_RECTIFICATION')} className="neo-button border-2 border-border px-3 py-1.5 font-bold">Request rectification</button><button onClick={verifyAudit} className="neo-button border-2 border-border px-3 py-1.5 font-bold">Verify audit chain</button></div>{(role === 'APPROVER' || role === 'ADMIN') && <div className="border-t-2 border-border pt-3 space-y-2"><textarea value={rationale} onChange={(e) => setRationale(e.target.value)} className="w-full border-2 border-border p-2 font-mono text-sm" rows={2} /><div className="flex gap-2"><button onClick={() => decide('APPROVE')} className="neo-button bg-emerald-600 text-white px-3 py-1.5 font-bold flex items-center gap-1"><CheckCircle2 size={16} /> Approve</button><button onClick={() => decide('REJECT')} className="neo-button bg-red-600 text-white px-3 py-1.5 font-bold flex items-center gap-1"><XCircle size={16} /> Reject</button></div></div>}</div>}
 
-          {findings.length > 0 && <div className="neo-box p-5 bg-card"><h3 className="text-xl font-bold">Validation findings <span className="text-xs font-mono">(advisory)</span></h3><div className="mt-3 space-y-2">{findings.map((finding) => <div key={finding.id || finding.code} className="border-2 border-border p-3"><div className="flex items-center gap-2"><Badge value={finding.outcome} /><span className="font-bold">{finding.title || finding.code}</span></div><p className="text-sm mt-1">{finding.message}</p>{finding.evidence?.length > 0 && <p className="text-xs font-mono mt-1">{finding.evidence.length} linked evidence item(s)</p>}</div>)}</div></div>}
+          {overview && <EvidenceWorkspace overview={overview} token={token} />}
 
-          {overview && <div className="grid md:grid-cols-2 gap-4"><div className="neo-box p-4 bg-card"><h3 className="font-bold">Advisory anomaly signals</h3>{!(overview.anomaly_signals || []).length && <p className="text-sm font-mono">No signals.</p>}{(overview.anomaly_signals || []).map((signal) => <div key={signal.id} className="border-t border-border py-2 text-sm"><b>{signal.signal_code}</b> · {signal.severity}<br />{signal.description}</div>)}</div><div className="neo-box p-4 bg-card"><h3 className="font-bold">Issuer verification</h3>{!(overview.issuer_verifications || []).length && <p className="text-sm font-mono">No verification attempts.</p>}{(overview.issuer_verifications || []).map((item) => <div key={item.id} className="border-t border-border py-2 text-sm"><Badge value={item.status} /> {item.issuer_code} {item.simulated_source && <span className="font-mono text-xs">(simulated source)</span>}</div>)}</div><div className="neo-box p-4 bg-card md:col-span-2"><h3 className="font-bold">Audit history</h3><div className="max-h-64 overflow-auto font-mono text-xs mt-2">{(overview.audit_events || []).map((event) => <div key={event.id} className="border-t border-border py-1">{event.sequence} · {event.event_type} · {event.actor_id?.slice(0, 8) || 'system'} · {event.event_hash?.slice(0, 16)}…</div>)}</div></div></div>}
+          {overview && role !== 'APPLICANT' && (
+            <AlertPanel
+              applicationId={selectedId}
+              alerts={overview.alerts}
+              token={token}
+              onRefreshed={loadReview}
+            />
+          )}
+
+          {overview && <VerificationTools applicationId={selectedId} overview={overview} token={token} onRefreshed={loadReview} />}
+
+          {overview && <div className="grid md:grid-cols-2 gap-4"><div className="neo-box p-4 bg-card"><h3 className="font-bold">Advisory anomaly signals</h3>{!(overview.anomaly_signals || []).length && <p className="text-sm font-mono">No signals.</p>}{(overview.anomaly_signals || []).map((signal) => <div key={signal.id} className="border-t border-border py-2 text-sm"><b>{signal.signal_code}</b> · {signal.severity}<br />{signal.message}</div>)}</div><div className="neo-box p-4 bg-card"><h3 className="font-bold">Issuer verification</h3>{!(overview.issuer_verifications || []).filter((item) => !['qr-payload', 'pdf-signature'].includes(item.adapter_code)).length && <p className="text-sm font-mono">No issuer verification attempts. Technical inspection results appear above.</p>}{(overview.issuer_verifications || []).filter((item) => !['qr-payload', 'pdf-signature'].includes(item.adapter_code)).map((item) => <div key={item.id} className="border-t border-border py-2 text-sm"><Badge value={item.status} /> <span className="font-mono text-xs">{item.adapter_code}</span> {item.simulated_source && <span className="font-mono text-xs">(simulated source)</span>}<br />{item.message}</div>)}</div><div className="neo-box p-4 bg-card md:col-span-2"><h3 className="font-bold">Audit history</h3><div className="max-h-64 overflow-auto font-mono text-xs mt-2">{(overview.audit_events || []).map((event) => <div key={event.id} className="border-t border-border py-1">{event.sequence} · {event.event_type} · {event.actor_id?.slice(0, 8) || 'system'} · {event.event_hash?.slice(0, 16)}…</div>)}</div></div></div>}
         </main>
       </section>
 

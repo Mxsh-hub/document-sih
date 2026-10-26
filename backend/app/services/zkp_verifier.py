@@ -37,6 +37,31 @@ def _find_vkey_path(circuit_name: str) -> Path | None:
     return None
 
 
+def _resolve_snarkjs() -> str:
+    """Locate an executable snarkjs entry point.
+
+    npm installs an extensionless POSIX shim plus a ``snarkjs.cmd`` wrapper on
+    Windows; only the wrapper can be spawned there. Returning the shim would
+    make verification fail with ``WinError 193`` instead of a real result.
+    """
+    candidates = [
+        settings.SNARKJS_BIN,
+        str(Path(__file__).resolve().parents[2] / "circuits" / "node_modules" / ".bin" / "snarkjs"),
+        str(Path(__file__).resolve().parents[3] / "circuits" / "node_modules" / ".bin" / "snarkjs"),
+    ]
+    wrappers = (".cmd", ".exe", ".bat") if os.name == "nt" else ()
+    for item in candidates:
+        if not item:
+            continue
+        path = Path(item)
+        for suffix in wrappers:
+            if path.with_name(path.name + suffix).is_file():
+                return str(path.with_name(path.name + suffix))
+        if path.is_file():
+            return str(path)
+    return "snarkjs"
+
+
 def verify_groth16(
     circuit_name: str,
     proof: dict[str, Any],
@@ -69,13 +94,7 @@ def verify_groth16(
             public_path = tmp / "public.json"
             proof_path.write_text(json.dumps(proof))
             public_path.write_text(json.dumps(public_signals))
-            # find snarkjs
-            candidates = [
-                settings.SNARKJS_BIN,
-                str(Path(__file__).resolve().parents[2] / "circuits" / "node_modules" / ".bin" / "snarkjs"),
-                str(Path(__file__).resolve().parents[3] / "circuits" / "node_modules" / ".bin" / "snarkjs"),
-            ]
-            snarkjs_bin = next((item for item in candidates if item and Path(item).exists()), "snarkjs")
+            snarkjs_bin = _resolve_snarkjs()
             result = subprocess.run(
                 [snarkjs_bin, "groth16", "verify", str(vkey_path), str(public_path), str(proof_path)],
                 capture_output=True,
@@ -123,12 +142,7 @@ def export_solidity_calldata(proof: dict[str, Any], public_signals: list[str]) -
         public_path = tmp / "public.json"
         proof_path.write_text(json.dumps(proof))
         public_path.write_text(json.dumps(public_signals))
-        candidates = [
-            settings.SNARKJS_BIN,
-            str(Path(__file__).resolve().parents[2] / "circuits" / "node_modules" / ".bin" / "snarkjs"),
-            str(Path(__file__).resolve().parents[3] / "circuits" / "node_modules" / ".bin" / "snarkjs"),
-        ]
-        snarkjs_bin = next((item for item in candidates if item and Path(item).exists()), "snarkjs")
+        snarkjs_bin = _resolve_snarkjs()
         result = subprocess.run(
             [snarkjs_bin, "zkey", "export", "soliditycalldata", str(public_path), str(proof_path)],
             capture_output=True,

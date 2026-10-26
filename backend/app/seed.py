@@ -179,26 +179,19 @@ def _seed_demo_issuer(db: Session) -> IssuerKey:
     return key
 
 
-def _seed_rules(db: Session, category: ApplicationCategory, admin: User) -> RuleSet:
-    existing = db.scalar(
-        select(RuleSet).where(RuleSet.code == "EOA-SYNTHETIC-RULES", RuleSet.version == 1)
-    )
-    if existing:
-        return existing
-    rule_set = RuleSet(
-        code="EOA-SYNTHETIC-RULES",
-        name="Synthetic EoA validation rules",
-        category_id=category.id,
-        version=1,
-        status=RuleSetStatus.ACTIVE,
-        effective_from=date(2026, 1, 1),
-        source_citation="Synthetic demonstration rules; replace configurations with the applicable AICTE Approval Process Handbook clauses.",
-        synthetic=True,
-        created_by=admin.id,
-        activated_at=datetime.now(timezone.utc),
-    )
-    rule_set.rules = [
-        Rule(
+EOA_RULE_SET_CODE = "EOA-SYNTHETIC-RULES"
+
+
+def _eoa_rule_definitions() -> list[dict]:
+    """Rule definitions for the synthetic EoA rule set.
+
+    Kept as data so the seed can detect an older version (fewer rules) and
+    publish a new active version instead of mutating a rule set that historical
+    validation runs still reference.
+    """
+
+    return [
+        dict(
             code="CHECKLIST_REQUIRED",
             title="Required checklist evidence",
             description="Every required checklist item must have accepted evidence or an authorised waiver.",
@@ -209,7 +202,7 @@ def _seed_rules(db: Session, category: ApplicationCategory, admin: User) -> Rule
             sort_order=1,
             source_citation="Synthetic checklist policy.",
         ),
-        Rule(
+        dict(
             code="DOCUMENT_TEXT_EXTRACTED",
             title="Document text extraction quality",
             description="Current documents should be machine-readable with sufficient confidence for automated checks.",
@@ -220,7 +213,7 @@ def _seed_rules(db: Session, category: ApplicationCategory, admin: User) -> Rule
             sort_order=2,
             source_citation="Synthetic extraction quality policy.",
         ),
-        Rule(
+        dict(
             code="AFFILIATION_VALIDITY",
             title="Affiliation certificate validity",
             description="The affiliation certificate's extracted validity date must not be expired.",
@@ -231,7 +224,7 @@ def _seed_rules(db: Session, category: ApplicationCategory, admin: User) -> Rule
             sort_order=3,
             source_citation="Synthetic EoA document validity policy.",
         ),
-        Rule(
+        dict(
             code="INSTITUTION_NAME_CONSISTENCY",
             title="Institution name consistency",
             description="Extracted institution names are compared with the institution profile.",
@@ -245,7 +238,7 @@ def _seed_rules(db: Session, category: ApplicationCategory, admin: User) -> Rule
             sort_order=4,
             source_citation="Synthetic data consistency policy.",
         ),
-        Rule(
+        dict(
             code="PREVIOUS_APPROVAL_STATUS",
             title="Previous approval status",
             description="The latest synthetic approval record should be in an accepted status.",
@@ -256,7 +249,7 @@ def _seed_rules(db: Session, category: ApplicationCategory, admin: User) -> Rule
             sort_order=5,
             source_citation="Synthetic institutional record policy.",
         ),
-        Rule(
+        dict(
             code="TER_PAYMENT_STATUS",
             title="TER payment status",
             description="The latest synthetic TER record should show the configured accepted status.",
@@ -267,7 +260,7 @@ def _seed_rules(db: Session, category: ApplicationCategory, admin: User) -> Rule
             sort_order=6,
             source_citation="Synthetic TER record policy.",
         ),
-        Rule(
+        dict(
             code="ACCREDITATION_VALIDITY",
             title="Accreditation validity",
             description="Synthetic accreditation records should be active and not expired.",
@@ -278,7 +271,7 @@ def _seed_rules(db: Session, category: ApplicationCategory, admin: User) -> Rule
             sort_order=7,
             source_citation="Synthetic accreditation record policy.",
         ),
-        Rule(
+        dict(
             code="OPEN_DEFICIENCIES",
             title="Open compliance deficiencies",
             description="Open synthetic compliance deficiencies require human review.",
@@ -289,7 +282,7 @@ def _seed_rules(db: Session, category: ApplicationCategory, admin: User) -> Rule
             sort_order=8,
             source_citation="Synthetic compliance record policy.",
         ),
-        Rule(
+        dict(
             code="FACULTY_APPROVED_MINIMUM",
             title="Approved faculty minimum",
             description="The count of synthetic approved faculty records is compared with a configurable minimum.",
@@ -300,7 +293,85 @@ def _seed_rules(db: Session, category: ApplicationCategory, admin: User) -> Rule
             sort_order=9,
             source_citation="Synthetic faculty record policy; threshold is configurable and not an official AICTE rule.",
         ),
+        dict(
+            code="AFFILIATION_DECLARATION_MATCH",
+            title="Declared affiliation matches the certificate",
+            description=(
+                "The affiliation number and validity date declared by the applicant are compared with "
+                "the values extracted from the affiliation certificate."
+            ),
+            rule_type=RuleType.FIELD_CONSISTENCY,
+            severity=RuleSeverity.ADVISORY,
+            config={
+                "document_type": "AFFILIATION_CERTIFICATE",
+                "fields": ["affiliation_number", "valid_until"],
+            },
+            required=True,
+            sort_order=10,
+            source_citation="Synthetic three-way consistency policy; advisory only.",
+        ),
+        dict(
+            code="PROGRAMME_DECLARATION_MATCH",
+            title="Declared programmes match the synthetic record",
+            description=(
+                "Declared programme codes, per-programme intake, and total intake are compared with the "
+                "synthetic programme records and with each other."
+            ),
+            rule_type=RuleType.INSTITUTION_RECORD,
+            severity=RuleSeverity.ADVISORY,
+            config={"record_type": "programmes", "compare_intake": True},
+            required=True,
+            sort_order=11,
+            source_citation="Synthetic programme record policy; advisory only.",
+        ),
+        dict(
+            code="FACULTY_COUNT_DECLARATION_MATCH",
+            title="Declared faculty count matches the synthetic record",
+            description=(
+                "The faculty count declared by the applicant is compared with the number of synthetic "
+                "faculty records, within a configurable tolerance."
+            ),
+            rule_type=RuleType.INSTITUTION_RECORD,
+            severity=RuleSeverity.ADVISORY,
+            config={"record_type": "faculty", "tolerance": 0},
+            required=True,
+            sort_order=12,
+            source_citation="Synthetic faculty record policy; advisory only.",
+        ),
     ]
+
+
+def _seed_rules(db: Session, category: ApplicationCategory, admin: User) -> RuleSet:
+    definitions = _eoa_rule_definitions()
+    existing = list(
+        db.scalars(
+            select(RuleSet).where(RuleSet.code == EOA_RULE_SET_CODE).order_by(RuleSet.version)
+        )
+    )
+    current = next(
+        (item for item in reversed(existing) if len(item.rules) == len(definitions)), None
+    )
+    if current is not None:
+        return current
+    # An older rule set has fewer rules: archive it (never mutate in place) and
+    # publish a new active version so historical validation runs stay readable.
+    for item in existing:
+        if item.status is RuleSetStatus.ACTIVE:
+            item.status = RuleSetStatus.ARCHIVED
+    version = max((item.version for item in existing), default=0) + 1
+    rule_set = RuleSet(
+        code=EOA_RULE_SET_CODE,
+        name="Synthetic EoA validation rules",
+        category_id=category.id,
+        version=version,
+        status=RuleSetStatus.ACTIVE,
+        effective_from=date(2026, 1, 1),
+        source_citation="Synthetic demonstration rules; replace configurations with the applicable AICTE Approval Process Handbook clauses.",
+        synthetic=True,
+        created_by=admin.id,
+        activated_at=datetime.now(timezone.utc),
+    )
+    rule_set.rules = [Rule(**definition) for definition in definitions]
     db.add(rule_set)
     db.flush()
     return rule_set

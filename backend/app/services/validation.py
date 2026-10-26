@@ -25,6 +25,7 @@ from app.db.enums import (
 from app.db.models import (
     Application,
     ApplicationChecklistItem,
+    ApplicationDeclaration,
     Document,
     DocumentVersion,
     ExtractedField,
@@ -42,7 +43,7 @@ from app.services.records import get_record_bundle
 
 logger = logging.getLogger(__name__)
 
-ENGINE_VERSION = "rules-phase5-1.0"
+ENGINE_VERSION = "rules-phase5-1.1"
 
 
 @dataclass
@@ -127,6 +128,8 @@ def _evidence_for_field(document: Document, item: ExtractedField) -> Evidence:
             "normalized_value": item.normalized_value,
             "page": item.page,
             "bbox": item.bbox,
+            "page_width": float(item.page_width) if item.page_width is not None else None,
+            "page_height": float(item.page_height) if item.page_height is not None else None,
             "confidence": float(item.confidence) if item.confidence is not None else None,
         },
     )
@@ -446,6 +449,289 @@ def _record_result(rule: Rule, records: dict[str, Any]) -> RuleResult:
     )
 
 
+# --- Structured declaration consistency ------------------------------------
+#
+# Each rule compares applicant-declared values with either extracted document
+# fields or synthetic institutional records. Every outcome is advisory: a
+# mismatch means "a human should look at these two sources", never "the
+# applicant lied" and never an automatic rejection.
+
+
+def _declaration_for(db: Session, application: Application) -> ApplicationDeclaration | None:
+    return db.scalar(
+        select(ApplicationDeclaration).where(
+            ApplicationDeclaration.application_id == application.id
+        )
+    )
+
+
+def _first_text(fields: list[ExtractedField]) -> str | None:
+    if not fields:
+        return None
+    return fields[0].normalized_value or fields[0].raw_value
+
+
+def _normalize_identifier(value: str | None) -> str:
+    return re.sub(r"[^A-Z0-9]", "", (value or "").upper())
+
+
+def _iso(value: date | None) -> str | None:
+    return value.isoformat() if value else None
+
+
+def _evidence_for_declaration(declaration: ApplicationDeclaration) -> Evidence:
+    return Evidence(
+        evidence_type="DECLARATION",
+        entity_id=declaration.id,
+        label=f"Applicant declaration v{declaration.version}",
+        metadata={
+            "affiliation_number": declaration.affiliation_number,
+            "affiliation_valid_until": _iso(declaration.affiliation_valid_until),
+            "programmes": declaration.programmes,
+            "total_intake": declaration.total_intake,
+            "faculty_count": declaration.faculty_count,
+            "previous_approval_reference": declaration.previous_approval_reference,
+            "version": declaration.version,
+            "advisory": True,
+            "note": "Applicant-supplied declaration; not verified data.",
+        },
+    )
+
+
+def _evidence_for_records(
+    records: dict[str, Any], record_type: str, label: str
+) -> Evidence:
+    group = records.get(record_type) or {}
+    items = group.get("items") or []
+    return Evidence(
+        evidence_type="RECORD",
+        label=label,
+        metadata={
+            "record_type": record_type,
+            "count": len(items),
+            "source": group.get("source"),
+            "synthetic": True,
+            "items": items[:10],
+        },
+    )
+
+
+def _declaration_affiliation_result(
+    db: Session, application: Application
+) -> RuleResult:
+    declaration = _declaration_for(db, application)
+    if declaration is None:
+        return RuleResult(
+            outcome=RuleOutcome.NOT_AVAILABLE,
+            message="No structured declaration has been saved for this application.",
+        )
+    if declaration.affiliation_number is None and declaration.affiliation_valid_until is None:
+        return RuleResult(
+            outcome=RuleOutcome.NOT_AVAILABLE,
+            message="The declaration does not state affiliation details.",
+            evidence=[_evidence_for_declaration(declaration)],
+        )
+    document = _latest_document(db, application.id, DocumentType.AFFILIATION_CERTIFICATE)
+    extraction = _extraction_for_document(db, document) if document else None
+    if document is None or extraction is None:
+        return RuleResult(
+            outcome=RuleOutcome.NOT_AVAILABLE,
+            message="The affiliation certificate is missing or has not been extracted, so the declaration cannot be compared.",
+            evidence=[_evidence_for_declaration(declaration)],
+        )
+    number_fields = _field_values(extraction, "affiliation_number")
+    date_fields = _field_values(extraction, "valid_until")
+    extracted_number = _first_text(number_fields)
+    extracted_valid = _date_value(_first_text(date_fields))
+    if extracted_number is None and extracted_valid is None:
+        return RuleResult(
+            outcome=RuleOutcome.NOT_AVAILABLE,
+            message="No comparable affiliation fields were extracted from the certificate.",
+            evidence=[_evidence_for_declaration(declaration)],
+        )
+
+    mismatches: list[dict[str, Any]] = []
+    if declaration.affiliation_number is not None:
+        if extracted_number is None:
+            mismatches.append({"field": "affiliation_number", "reason": "not_extracted"})
+        elif _normalize_identifier(declaration.affiliation_number) != _normalize_identifier(extracted_number):
+            mismatches.append({"field": "affiliation_number", "reason": "value_mismatch"})
+    if declaration.affiliation_valid_until is not None:
+        if extracted_valid is None:
+            mismatches.append({"field": "valid_until", "reason": "not_extracted"})
+        elif declaration.affiliation_valid_until != extracted_valid:
+            mismatches.append({"field": "valid_until", "reason": "value_mismatch"})
+
+    evidence = [_evidence_for_declaration(declaration)]
+    evidence.extend(_evidence_for_field(document, item) for item in number_fields[:1])
+    evidence.extend(_evidence_for_field(document, item) for item in date_fields[:1])
+    details = {
+        "declared": {
+            "affiliation_number": declaration.affiliation_number,
+            "affiliation_valid_until": _iso(declaration.affiliation_valid_until),
+        },
+        "extracted": {
+            "document_type": document.document_type.value,
+            "affiliation_number": extracted_number,
+            "valid_until": _iso(extracted_valid),
+        },
+        "mismatches": mismatches,
+        "advisory": True,
+    }
+    if mismatches:
+        return RuleResult(
+            outcome=RuleOutcome.FAIL,
+            message="Declared affiliation details differ from the extracted certificate; review both sources.",
+            details=details,
+            evidence=evidence,
+        )
+    return RuleResult(
+        outcome=RuleOutcome.PASS,
+        message="Declared affiliation details agree with the extracted certificate.",
+        details=details,
+        evidence=evidence,
+    )
+
+
+def _declaration_programme_result(
+    records: dict[str, Any], declaration: ApplicationDeclaration | None
+) -> RuleResult:
+    if declaration is None:
+        return RuleResult(
+            outcome=RuleOutcome.NOT_AVAILABLE,
+            message="No structured declaration has been saved for this application.",
+        )
+    declared = [item for item in (declaration.programmes or []) if item.get("code")]
+    if not declared:
+        return RuleResult(
+            outcome=RuleOutcome.NOT_AVAILABLE,
+            message="The declaration does not list any programmes.",
+            evidence=[_evidence_for_declaration(declaration)],
+        )
+    record_items = (records.get("programmes") or {}).get("items") or []
+    if not record_items:
+        return RuleResult(
+            outcome=RuleOutcome.NOT_AVAILABLE,
+            message="No synthetic programme records are available for comparison.",
+            evidence=[_evidence_for_declaration(declaration)],
+        )
+
+    record_by_code = {str(item.get("code", "")).upper(): item for item in record_items}
+    declared_codes = [str(item["code"]).upper() for item in declared]
+    missing_in_records = sorted(set(declared_codes) - set(record_by_code))
+    unlisted_in_declaration = sorted(set(record_by_code) - set(declared_codes))
+    intake_mismatches: list[dict[str, Any]] = []
+    for item in declared:
+        record = record_by_code.get(str(item["code"]).upper())
+        if not record:
+            continue
+        declared_intake = item.get("intake")
+        record_intake = record.get("intake")
+        if declared_intake is not None and record_intake is not None:
+            if int(declared_intake) != int(record_intake):
+                intake_mismatches.append(
+                    {
+                        "code": str(item["code"]).upper(),
+                        "declared": int(declared_intake),
+                        "record": int(record_intake),
+                    }
+                )
+
+    declared_intakes = [int(item["intake"]) for item in declared if item.get("intake") is not None]
+    declared_intake_sum = sum(declared_intakes)
+    total_intake_mismatch = (
+        declaration.total_intake is not None
+        and bool(declared_intakes)
+        and declaration.total_intake != declared_intake_sum
+    )
+
+    problems = bool(missing_in_records or intake_mismatches or total_intake_mismatch)
+    details = {
+        "declared_codes": declared_codes,
+        "record_codes": sorted(record_by_code),
+        "missing_in_records": missing_in_records,
+        "unlisted_in_declaration": unlisted_in_declaration,
+        "intake_mismatches": intake_mismatches,
+        "declared_total_intake": declaration.total_intake,
+        "declared_intake_sum": declared_intake_sum if declared_intakes else None,
+        "total_intake_mismatch": total_intake_mismatch,
+        "advisory": True,
+    }
+    evidence = [
+        _evidence_for_declaration(declaration),
+        _evidence_for_records(records, "programmes", "Synthetic programme records"),
+    ]
+    if problems:
+        return RuleResult(
+            outcome=RuleOutcome.FAIL,
+            message="Declared programmes or intake differ from the synthetic programme records.",
+            details=details,
+            evidence=evidence,
+        )
+    return RuleResult(
+        outcome=RuleOutcome.PASS,
+        message="Declared programmes and intake agree with the synthetic programme records.",
+        details=details,
+        evidence=evidence,
+    )
+
+
+def _declaration_faculty_result(
+    records: dict[str, Any], rule: Rule, declaration: ApplicationDeclaration | None
+) -> RuleResult:
+    if declaration is None:
+        return RuleResult(
+            outcome=RuleOutcome.NOT_AVAILABLE,
+            message="No structured declaration has been saved for this application.",
+        )
+    if declaration.faculty_count is None:
+        return RuleResult(
+            outcome=RuleOutcome.NOT_AVAILABLE,
+            message="The declaration does not state a faculty count.",
+            evidence=[_evidence_for_declaration(declaration)],
+        )
+    items = (records.get("faculty") or {}).get("items") or []
+    if not items:
+        return RuleResult(
+            outcome=RuleOutcome.NOT_AVAILABLE,
+            message="No synthetic faculty records are available for comparison.",
+            evidence=[_evidence_for_declaration(declaration)],
+        )
+    tolerance = int(rule.config.get("tolerance", 0))
+    approved = [
+        item for item in items if str(item.get("approved_status", "")).upper() == "APPROVED"
+    ]
+    difference = declaration.faculty_count - len(items)
+    details = {
+        "declared_faculty_count": declaration.faculty_count,
+        "record_faculty_count": len(items),
+        "record_approved_count": len(approved),
+        "difference": difference,
+        "tolerance": tolerance,
+        "advisory": True,
+    }
+    evidence = [
+        _evidence_for_declaration(declaration),
+        _evidence_for_records(records, "faculty", "Synthetic faculty records"),
+    ]
+    if abs(difference) > tolerance:
+        return RuleResult(
+            outcome=RuleOutcome.FAIL,
+            message=(
+                f"Declared faculty count ({declaration.faculty_count}) differs from the "
+                f"synthetic faculty records ({len(items)}) beyond the tolerance of {tolerance}."
+            ),
+            details=details,
+            evidence=evidence,
+        )
+    return RuleResult(
+        outcome=RuleOutcome.PASS,
+        message="Declared faculty count agrees with the synthetic faculty records.",
+        details=details,
+        evidence=evidence,
+    )
+
+
 def _evaluate(
     db: Session, application: Application, rule: Rule, records: dict[str, Any]
 ) -> RuleResult:
@@ -457,6 +743,12 @@ def _evaluate(
         return _date_validity_result(db, application, rule)
     if rule.code == "INSTITUTION_NAME_CONSISTENCY":
         return _field_consistency_result(db, application, rule)
+    if rule.code == "AFFILIATION_DECLARATION_MATCH":
+        return _declaration_affiliation_result(db, application)
+    if rule.code == "PROGRAMME_DECLARATION_MATCH":
+        return _declaration_programme_result(records, _declaration_for(db, application))
+    if rule.code == "FACULTY_COUNT_DECLARATION_MATCH":
+        return _declaration_faculty_result(records, rule, _declaration_for(db, application))
     if rule.code in {
         "PREVIOUS_APPROVAL_STATUS",
         "TER_PAYMENT_STATUS",

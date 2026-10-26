@@ -1,6 +1,6 @@
 # Data Model — AstraVerify (AICTE Adaptation)
 
-**Status:** target model with as-built delta; Alembic head `4eeaf2dbd8cc`
+**Status:** target model with as-built delta; Alembic head `c3d5e7f9a1b2`
 **Database:** PostgreSQL 16
 **ORM / migrations:** SQLAlchemy 2.x + Alembic
 **Companion documents:** [`ARCHITECTURE.md`](ARCHITECTURE.md) · [`API_CONTRACTS.md`](API_CONTRACTS.md) · [`SPEC.md`](../SPEC.md)
@@ -9,7 +9,7 @@
 
 The implemented schema is in `backend/app/db/models.py`; migrations are under `backend/alembic/versions/`.
 
-**Implemented tables:** `institutions`, `users`, `refresh_tokens`, `application_categories`, `checklist_templates`, `checklist_template_items`, `applications`, `application_checklist_items`, `application_status_history`, `documents`, `document_versions`, `reference_counters`, `approval_history`, `programmes`, `faculty_records`, `compliance_deficiencies`, `ter_payments`, `accreditation_records`, `nocs_permissions`, `extractions`, `extracted_fields`, `rule_sets`, `rules`, `validation_runs`, `findings`, `finding_evidence`, `record_snapshots`, `issuer_keys`, `issued_credentials`, `issuer_verifications`, `anomaly_signals`, `infrastructure_evidence`, `review_actions`, `decisions`, `alerts`, `audit_events`, `zk_proofs`, `zk_challenges`.
+**Implemented tables:** `institutions`, `users`, `refresh_tokens`, `application_categories`, `checklist_templates`, `checklist_template_items`, `applications`, `application_declarations`, `application_checklist_items`, `application_status_history`, `documents`, `document_versions`, `reference_counters`, `approval_history`, `programmes`, `faculty_records`, `compliance_deficiencies`, `ter_payments`, `accreditation_records`, `nocs_permissions`, `extractions`, `extracted_fields`, `rule_sets`, `rules`, `validation_runs`, `findings`, `finding_evidence`, `record_snapshots`, `issuer_keys`, `issued_credentials`, `issuer_verifications`, `anomaly_signals`, `infrastructure_evidence`, `review_actions`, `decisions`, `alerts`, `audit_events`, `zk_proofs`, `zk_challenges`.
 
 **Target-only tables not implemented:** `idempotency_keys`, `security_events`, `outbox_events`, `jobs`, `processing_runs`, `report_exports`, `chain_anchors`, `credential_anchors`.
 
@@ -95,6 +95,7 @@ erDiagram
     DOCUMENT_VERSIONS ||--|| EXTRACTIONS : yields
     EXTRACTIONS ||--o{ EXTRACTED_FIELDS : contains
     APPLICATIONS ||--o{ APPLICATION_CHECKLIST_ITEMS : snapshots
+    APPLICATIONS ||--|| APPLICATION_DECLARATIONS : declares
     APPLICATIONS ||--o{ INFRASTRUCTURE_EVIDENCE : attaches
     APPLICATIONS ||--o{ VALIDATION_RUNS : evaluated_by
     VALIDATION_RUNS ||--o{ FINDINGS : produces
@@ -236,6 +237,27 @@ Invariant: `WAIVED` requires a non-empty justification and an audit event.
 
 `id`, `application_id`, `from_status`, `to_status`, `actor_id`, `reason`, `created_at`. Append-only. Audited in addition to the global audit log.
 
+### 5.8 `application_declarations`
+
+Applicant-declared structured facts. One row per application (unique `application_id`); values are applicant-supplied and are **never** treated as verified data.
+
+| Column | Type | Constraints |
+|---|---|---|
+| `id` | uuid | PK |
+| `application_id` | uuid | FK → applications, unique, cascade delete |
+| `affiliation_number` | text | nullable |
+| `affiliation_valid_until` | date | nullable |
+| `programmes` | jsonb | not null default `[]`; items `{code, name, level, intake}` |
+| `total_intake` | integer | nullable, `>= 0` |
+| `faculty_count` | integer | nullable, `>= 0` |
+| `previous_approval_reference` | text | nullable (stored, not compared) |
+| `declared_by` | uuid | FK → users, nullable |
+| `created_at`, `updated_at` | timestamptz | not null |
+| `version` | integer | not null default 1, incremented on each save |
+
+Editable only by the owning applicant and only while the application is `DRAFT`; updates are audited (`application.declaration_saved`). The seeded consistency rules read this table and return `NOT_AVAILABLE` when it is absent.
+
+
 ---
 
 ## 6. Documents and processing
@@ -284,7 +306,8 @@ No `superseded_by` column: current version is `documents.current_version_id`; hi
 
 ### 6.4 `extracted_fields`
 
-`id`, `extraction_id` FK, `name`, `raw_value` text, `normalized_value` text, `value_type` (`TEXT/DATE/NUMBER/IDENTIFIER`), `page` int, `bbox` jsonb, `confidence` numeric(4,3), `extractor` text, `created_at`.
+`id`, `extraction_id` FK, `name`, `raw_value` text, `normalized_value` text, `value_type` (`TEXT/DATE/NUMBER/IDENTIFIER`), `page` int, `bbox` jsonb, `page_width` numeric(10,3), `page_height` numeric(10,3), `confidence` numeric(4,3), `extractor` text, `created_at`.
+`page_width`/`page_height` are the page dimensions at extraction time so evidence boxes can be placed on the rendered page: PDF text layers report points, OCR'd rasters report pixels.
 Indexes: `(extraction_id, name)`, `(normalized_value)`.
 
 ### 6.5 `infrastructure_evidence`
@@ -424,10 +447,24 @@ Unique: `(issuer_did, key_id)`.
 
 MVP note: this is **not** full W3C VC Data Integrity conformance. It is Ed25519 over RFC 8785 canonical JSON, and must be labeled as such.
 
-### 9.3 `issuer_verifications` (immutable)
+### 9.3 `issuer_verifications` (append-only, as built)
 
-`id`, `document_id`, `document_version_id`, `adapter`, `source`, `simulated` bool, `status` verification_status, `request_ref`, `response_ref`, `response_summary` jsonb, `verified_fields` jsonb, `retrieved_at`, `created_at`.
-Indexes: `(document_id, created_at desc)`, `(status)`, `(simulated)`.
+| Column | Type | Notes |
+|---|---|---|
+| `id` | uuid | PK |
+| `document_version_id` | uuid | FK → `document_versions`, `CASCADE` |
+| `issuer_credential_id` | uuid | FK → `issued_credentials`, nullable |
+| `adapter_code` | text | `demo`, `external-simulated`, `qr-payload`, `pdf-signature` |
+| `status` | issuer_verification_status | `VERIFIED`, `MISMATCH`, `NOT_FOUND`, `SOURCE_UNAVAILABLE`, `ERROR` |
+| `message` | text | Human-readable result; technical inspections state their limits |
+| `evidence` | jsonb | Adapter-specific evidence. Technical inspections store `state`, `engine_version`, `advisory_only`, `cryptographically_verified`, payload/range facts, and the document SHA-256 |
+| `simulated_source` | bool | `true` for the demo issuer and external placeholder; `false` for local technical inspection |
+| `verified_by` | uuid | FK → `users`, nullable |
+| `created_at` | timestamptz | Not null |
+
+Index: `(document_version_id, created_at)`.
+
+The technical inspection adapters do not add columns and never overwrite earlier rows. QR payloads are recorded but not fetched; PDF signature structures are inspected but not cryptographically verified. `review-overview.technical_verifications` returns only the newest row per `(document_version_id, adapter_code)`, while `/document-versions/{id}/issuer-verifications` returns the full history.
 
 ### 9.4 `anomaly_signals` (immutable)
 
@@ -500,11 +537,25 @@ Indexes: `(application_id, created_at)`.
 Unique: one final decision per application: `unique(application_id)`.
 Only `APPROVER` role may insert.
 
-### 10.3 `alerts`
+### 10.3 `alerts` (as built)
 
-`id`, `application_id`, `type` (`MISSING_DOCUMENT`, `EXPIRED_DOCUMENT`, `PENDING_VERIFICATION`, `ANOMALY`, `UNRESOLVED_FINDING`, `ANCHOR_FAILED`), `severity`, `status` alert_status, `dedupe_key` unique, `message`, `created_at`, `acknowledged_by`, `acknowledged_at`, `resolved_at`.
-Indexes: `(application_id, status)`, `(status, severity)`.
-`dedupe_key` is deterministic (e.g., `app:{id}:finding:{finding_id}`) so re-runs do not duplicate alerts.
+| Column | Type | Notes |
+|---|---|---|
+| `id` | uuid | PK |
+| `application_id` | uuid | FK `applications`, cascade delete |
+| `alert_type` | enum `alert_type_enum` | `VALIDATION_FAILURE`, `EXPIRED_DOCUMENT`, `PENDING_VERIFICATION`, `UNRESOLVED_DISCREPANCY`, `RECTIFICATION_REQUEST`, `ESCALATION` |
+| `status` | enum `alert_status_enum` | `OPEN`, `ACKNOWLEDGED`, `RESOLVED` |
+| `title`, `message` | text | Advisory text derived from the finding/anomaly |
+| `source_ref` | text | ID of the originating finding, anomaly signal, or review action |
+| `payload` | jsonb | Source metadata plus `disposition` and `resolution_note` once resolved |
+| `acknowledged_by/at`, `resolved_by/at` | uuid/timestamptz | `resolved_by` stays null for system `SUPERSEDED` resolutions |
+| `created_at` | timestamptz | |
+
+Unique `(application_id, alert_type, source_ref)`; index `(application_id, status)`.
+
+Findings and anomaly signals are re-created on every validation run, so a new run produces new `source_ref` values. Alerts whose source is not part of the newest run are resolved as `SUPERSEDED` (`payload.disposition = "SUPERSEDED"`, `resolved_by = null`, `alert.superseded` audit event) instead of accumulating. Human-created rectification and escalation alerts are never auto-resolved.
+
+`payload.disposition` holds the human disposition (`ADDRESSED`, `FALSE_POSITIVE`, `DUPLICATE`, `SUPERSEDED`, `ACCEPTED_RISK`, `ESCALATED`). It is JSONB rather than a column enum so recording a disposition needs no migration; `Alert.disposition` is a read-only Python property. Only `FALSE_POSITIVE` and `ACCEPTED_RISK` require a note.
 
 ### 10.4 `audit_events` (append-only)
 
@@ -532,9 +583,9 @@ Indexes: `(object_type, object_id, seq)`, `(actor_id, created_at)`, `(created_at
 
 There is **no separate `audit_chain_state` table**. `audit_events` has a unique `sequence`, `previous_hash`, and `event_hash`; each insert selects the latest event and appends. Verification recomputes the chain. Concurrent writers rely on the transaction/unique constraint; a serialized writer is a production hardening item.
 
-### 10.6 `report_exports` (not implemented)
+### 10.6 Report export (implemented, no table)
 
-No report export table or endpoint exists. Findings and review data are available through APIs; formal PDF/JSON report generation remains a gap.
+There is no `report_exports` table and no queued export job. `GET /applications/{id}/report?format=json|markdown|html` renders the report synchronously from existing rows (`application-report-1.0`) and streams it as an attachment. The only persistent trace is an `application.report_exported` audit event (payload: `format`, `report_version`, `finding_count`). Reports are advisory review aids: no PDF is generated, nothing is signed, and the body states that it is not an AICTE decision or certificate.
 
 ---
 
@@ -579,9 +630,9 @@ No `outbox_events`, `jobs`, or `processing_runs` tables exist. Processing and va
 
 - **Extensions:** `citext` (case-insensitive email) and `pgcrypto` (`gen_random_uuid()`; built in on PostgreSQL 13+ but enabled explicitly). Created in the first migration.
 - **Circular foreign keys:** `documents.current_version_id` ↔ `document_versions.document_id` and `validation_runs.snapshot_id` ↔ `institutional_record_snapshots.validation_run_id` are added with `ALTER TABLE` after both tables exist, or declared `DEFERRABLE INITIALLY DEFERRED`.
-- **Alembic** with one migration per phase; autogenerate reviewed manually.
+- **Alembic** with one migration per phase; autogenerate reviewed manually. Current head: `c3d5e7f9a1b2` (structured declarations). The post-MVP M4/M5 work (report export, alert dispositions, self-check) deliberately adds **no** migration: dispositions live in `alerts.payload` and reports/self-checks are computed on read.
 - Naming convention configured in SQLAlchemy metadata for stable constraint names.
-- **Seed** (`python -m app.seed`): idempotent synthetic demo data — 1 admin, 1 reviewer, 1 approver, 1 auditor, 2 applicant users, 2 institutions, EoA category and checklist, rule sets, institutional records, demo issuer key. Password defaults to `ChangeMe123!` unless `SEED_PASSWORD` is set. The seeder does not create applications or documents; use the API/console or tests for those.
+- **Seed** (`python -m app.seed`): idempotent synthetic demo data — 1 admin, 1 reviewer, 1 approver, 1 auditor, 2 applicant users, 2 institutions, EoA category and checklist, rule sets, institutional records, demo issuer key. Password defaults to `ChangeMe123!` unless `SEED_PASSWORD` is set. The seeder does not create applications or documents; use the API/console or tests for those. The EoA rule set is seeded as `EOA-SYNTHETIC-RULES` v1 with 12 rules; if an older rule set with fewer rules is found it is archived and a new active version is published, so historical validation runs keep their original rule set.
 - **Tests** use PostgreSQL `astra_test`; the suite runs migrations/seed helpers, not `create_all`.
 - **Retention job**: **not implemented.** No `RETENTION_DAYS` enforcement, automated deletion, or archival exists. This is a documented production gap.
 - **Backups**: out of scope for the demo.

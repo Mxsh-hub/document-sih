@@ -19,23 +19,25 @@ export default function LandingPage() {
           className="flex-1 space-y-8"
         >
           <div className="inline-block bg-accent text-accent-foreground font-mono font-bold px-4 py-1 border-2 border-border shadow-neo-sm transform -rotate-2 hover:rotate-0 transition-transform cursor-default">
-            Smart India Hackathon 2026
+            Smart India Hackathon 2026 · AICTE problem statement
           </div>
           <h1 className="text-6xl md:text-8xl font-black font-sans uppercase leading-none tracking-tight">
-            Trust<br/>
-            <span className="text-primary" style={{ textShadow: '6px 6px 0px var(--border)' }}>Zero-Knowledge.</span><br/>
-            Verify Everything.
+            Validate.<br/>
+            <span className="text-primary" style={{ textShadow: '6px 6px 0px var(--border)' }}>Verify.</span><br/>
+            Decide with evidence.
           </h1>
           <p className="text-xl md:text-2xl font-serif text-muted-foreground border-l-8 border-primary pl-6 max-w-2xl">
-            AstraVerify is a privacy-first, AI-powered document verification platform enabling instant, cryptographic proof of credentials without exposing your raw data.
+            AstraVerify is an AICTE decision-support prototype for Extension of Approval applications: page-level OCR extraction,
+            versioned regulatory rules, issuing-authority verification, and evidence-linked findings that keep every final
+            decision with authorised officials.
           </p>
           <div className="flex flex-wrap gap-6 pt-4">
-            <Link to="/wallet" className="neo-button flex items-center gap-2 text-lg">
-              <Fingerprint size={24} /> Access Wallet
+            <Link to="/compliance" className="neo-button flex items-center gap-2 text-lg">
+              <Fingerprint size={24} /> Open Compliance Console
             </Link>
-            <Link to="/verifier" className="neo-button-accent flex items-center gap-2 text-lg">
-              <FileSearch size={24} /> Verify Document
-            </Link>
+            <a href="#architecture" className="neo-button-accent flex items-center gap-2 text-lg">
+              <FileSearch size={24} /> How it works
+            </a>
           </div>
         </motion.div>
 
@@ -79,8 +81,8 @@ export default function LandingPage() {
         <div className="flex flex-col items-center text-center space-y-4">
           <h2 className="text-4xl md:text-5xl font-black uppercase inline-block border-b-8 border-primary pb-2">Live ZKP Demo</h2>
           <p className="font-serif text-xl text-muted-foreground max-w-3xl">
-            See Zero-Knowledge in action. Drag the slider to change your "Hidden CGPA". 
-            The Verifier only sees the cryptographic YES/NO result—they never see your actual score.
+            See zero-knowledge in action on the faculty-eligibility threshold check. The reviewer learns only whether the
+            server-issued threshold is met — never the underlying private value.
           </p>
         </div>
 
@@ -122,9 +124,9 @@ export default function LandingPage() {
 
           {/* Verifier Side */}
           <div className="neo-box p-8 bg-sidebar text-sidebar-foreground space-y-8 relative overflow-hidden">
-             <div className="absolute top-0 left-0 bg-accent text-accent-foreground font-bold px-4 py-1 border-b-2 border-r-2 border-border uppercase">Verifier (Employer)</div>
-             <h3 className="text-2xl font-bold uppercase mt-4 text-sidebar-primary">Verifier Check</h3>
-             <p className="font-mono text-sm text-sidebar-foreground/70">The verifier checks if: <strong>CGPA &gt;= 7.5</strong></p>
+             <div className="absolute top-0 left-0 bg-accent text-accent-foreground font-bold px-4 py-1 border-b-2 border-r-2 border-border uppercase">Reviewer (AICTE)</div>
+             <h3 className="text-2xl font-bold uppercase mt-4 text-sidebar-primary">Reviewer check</h3>
+             <p className="font-mono text-sm text-sidebar-foreground/70">The reviewer checks if the committed value meets the threshold.</p>
              
              <div className="flex-1 flex flex-col items-center justify-center h-48 mt-8">
                 {isDemoValid ? (
@@ -134,8 +136,8 @@ export default function LandingPage() {
                     className="flex flex-col items-center text-green-500"
                   >
                     <CheckCircle2 size={80} className="mb-4" />
-                    <span className="text-2xl font-black uppercase border-b-4 border-green-500">Mathematical Proof: VALID</span>
-                    <p className="mt-4 text-center font-serif text-sidebar-foreground/70">The candidate proved their CGPA is &gt;= 7.5.<br/>(Actual CGPA remains secret).</p>
+                    <span className="text-2xl font-black uppercase border-b-4 border-green-500">Threshold: SATISFIED</span>
+                    <p className="mt-4 text-center font-serif text-sidebar-foreground/70">The proof shows the private value meets the threshold.<br/>(The value itself stays hidden).</p>
                   </motion.div>
                 ) : (
                   <motion.div 
@@ -144,8 +146,8 @@ export default function LandingPage() {
                     className="flex flex-col items-center text-destructive"
                   >
                     <XCircle size={80} className="mb-4" />
-                    <span className="text-2xl font-black uppercase border-b-4 border-destructive">Mathematical Proof: INVALID</span>
-                    <p className="mt-4 text-center font-serif text-sidebar-foreground/70">The candidate failed to prove the constraint.<br/>(Actual CGPA remains secret).</p>
+                    <span className="text-2xl font-black uppercase border-b-4 border-destructive">Threshold: NOT MET</span>
+                    <p className="mt-4 text-center font-serif text-sidebar-foreground/70">The proof does not satisfy the constraint.<br/>(The value itself stays hidden).</p>
                   </motion.div>
                 )}
              </div>
@@ -154,8 +156,8 @@ export default function LandingPage() {
       </section>
 
       {/* How it Works Pipeline */}
-      <section className="space-y-12">
-        <h2 className="text-4xl md:text-5xl font-black uppercase text-center">The Architecture</h2>
+      <section id="architecture" className="space-y-12">
+        <h2 className="text-4xl md:text-5xl font-black uppercase text-center">The workflow</h2>
         
         <div className="flex flex-col md:flex-row items-center justify-center gap-4 md:gap-0 relative">
           
@@ -164,7 +166,7 @@ export default function LandingPage() {
               <Building2 size={32} />
             </div>
             <h3 className="font-black uppercase mb-2">1. Ingest</h3>
-            <p className="font-serif text-sm">OAuth with DigiLocker or Upload PDFs/Images.</p>
+            <p className="font-serif text-sm">Application data, document versions, and synthetic institutional records.</p>
           </div>
 
           <ArrowRight className="hidden md:block text-primary mx-4 shrink-0" size={40} />
@@ -173,8 +175,8 @@ export default function LandingPage() {
             <div className="h-16 w-16 mx-auto !bg-secondary text-secondary-foreground flex items-center justify-center border-4 border-border shadow-neo mb-4 group-hover:rotate-12 transition-transform">
               <BrainCircuit size={32} />
             </div>
-            <h3 className="font-black uppercase mb-2">2. AI Swarm</h3>
-            <p className="font-serif text-sm">Multi-agent analysis for forensics, deepfakes, & risk.</p>
+            <h3 className="font-black uppercase mb-2">2. Extract</h3>
+            <p className="font-serif text-sm">OCR with page, box, and confidence for every extracted field.</p>
           </div>
 
           <ArrowRight className="hidden md:block text-primary mx-4 shrink-0" size={40} />
@@ -183,8 +185,8 @@ export default function LandingPage() {
             <div className="h-16 w-16 mx-auto !bg-accent text-accent-foreground flex items-center justify-center border-4 border-border shadow-neo mb-4 group-hover:rotate-12 transition-transform">
               <Lock size={32} />
             </div>
-            <h3 className="font-black uppercase mb-2">3. Wallet ZKP</h3>
-            <p className="font-serif text-sm">Generate Groth16 SnarkJS proofs entirely in-browser.</p>
+            <h3 className="font-black uppercase mb-2">3. Validate</h3>
+            <p className="font-serif text-sm">Versioned rules produce PASS, FAIL, INCONCLUSIVE, or NOT_AVAILABLE findings.</p>
           </div>
 
           <ArrowRight className="hidden md:block text-primary mx-4 shrink-0" size={40} />
@@ -193,22 +195,22 @@ export default function LandingPage() {
             <div className="h-16 w-16 mx-auto !bg-primary text-primary-foreground flex items-center justify-center border-4 border-border shadow-neo mb-4 group-hover:rotate-12 transition-transform">
               <Shield size={32} />
             </div>
-            <h3 className="font-black uppercase mb-2 text-sidebar-primary">4. Polygon</h3>
-            <p className="font-serif text-sm text-sidebar-foreground/80">Verifiers mathematically validate and check anchor hash.</p>
+            <h3 className="font-black uppercase mb-2 text-sidebar-primary">4. Review</h3>
+            <p className="font-serif text-sm text-sidebar-foreground/80">Human review, documented decisions, and a hash-chained audit trail.</p>
           </div>
 
         </div>
       </section>
 
-      {/* Tiered Trust Banner */}
+      {/* Decision-support banner */}
       <section className="neo-box !bg-primary text-primary-foreground p-8 md:p-12 transform -rotate-1 hover:rotate-0 transition-transform">
         <div className="flex flex-col md:flex-row justify-between items-center gap-8">
            <div className="space-y-4 max-w-3xl">
-             <h2 className="text-3xl md:text-5xl font-black uppercase">Tiered Trust Model</h2>
-             <p className="font-mono text-xl">Not all documents are equal. AstraVerify classifies credentials into Gold, Silver, and Bronze tiers based on cryptographic origin and AI verification rigor.</p>
+             <h2 className="text-3xl md:text-5xl font-black uppercase">Decision support, not automated decisions</h2>
+             <p className="font-mono text-xl">Findings are advisory and evidence-linked. Missing or expired items are distinguished from failed checks, simulated sources are labelled, and only an authorised official records a final decision.</p>
            </div>
-           <Link to="/issuer" className="neo-button !bg-card !text-foreground hover:bg-card/90 whitespace-nowrap text-xl">
-             Issuer Portal <ArrowRight className="inline ml-2" />
+           <Link to="/compliance" className="neo-button !bg-card !text-foreground hover:bg-card/90 whitespace-nowrap text-xl">
+             Compliance Console <ArrowRight className="inline ml-2" />
            </Link>
         </div>
       </section>

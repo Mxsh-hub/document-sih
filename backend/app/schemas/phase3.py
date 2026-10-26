@@ -239,6 +239,52 @@ class ApplicationDetailOut(ApplicationOut):
     checklist: ChecklistCounts
 
 
+# --- Structured declaration (declared vs extracted vs records) -------------
+
+
+class DeclarationProgramme(BaseModel):
+    code: str = Field(min_length=1, max_length=40)
+    name: str | None = Field(default=None, max_length=200)
+    level: str | None = Field(default=None, max_length=40)
+    intake: int | None = Field(default=None, ge=0)
+
+    @field_validator("code")
+    @classmethod
+    def _normalize_code(cls, value: str) -> str:
+        return value.strip().upper()
+
+
+class DeclarationUpsert(BaseModel):
+    affiliation_number: str | None = Field(default=None, max_length=100)
+    affiliation_valid_until: date | None = None
+    programmes: list[DeclarationProgramme] = Field(default_factory=list, max_length=50)
+    total_intake: int | None = Field(default=None, ge=0)
+    faculty_count: int | None = Field(default=None, ge=0)
+    previous_approval_reference: str | None = Field(default=None, max_length=100)
+
+
+class DeclarationOut(ApiModel):
+    id: uuid.UUID
+    application_id: uuid.UUID
+    affiliation_number: str | None = None
+    affiliation_valid_until: date | None = None
+    programmes: list[dict[str, Any]] = Field(default_factory=list)
+    total_intake: int | None = None
+    faculty_count: int | None = None
+    previous_approval_reference: str | None = None
+    version: int
+    declared_by: uuid.UUID | None = None
+    created_at: datetime
+    updated_at: datetime
+
+
+class DeclarationEnvelope(BaseModel):
+    """Returned when the applicant has not declared anything yet."""
+
+    application_id: uuid.UUID
+    declaration: DeclarationOut | None = None
+
+
 class ApplicationPage(BaseModel):
     items: list[ApplicationOut]
     page: int
@@ -369,6 +415,8 @@ class ExtractedFieldOut(ApiModel):
     value_type: str
     page: int | None = None
     bbox: list[float] | None = None
+    page_width: float | None = None
+    page_height: float | None = None
     confidence: float | None = None
     extractor: str
 
@@ -630,6 +678,7 @@ class AlertOut(ApiModel):
     message: str
     source_ref: str
     payload: dict[str, Any] | None = None
+    disposition: str | None = None
     acknowledged_by: uuid.UUID | None = None
     acknowledged_at: datetime | None = None
     resolved_by: uuid.UUID | None = None
@@ -637,8 +686,47 @@ class AlertOut(ApiModel):
     created_at: datetime
 
 
+AlertDispositionValue = Literal[
+    "ADDRESSED",
+    "FALSE_POSITIVE",
+    "DUPLICATE",
+    "SUPERSEDED",
+    "ACCEPTED_RISK",
+    "ESCALATED",
+]
+
+
 class AlertResolution(BaseModel):
+    """Resolve an alert with an explicit human disposition.
+
+    The disposition is stored in the alert payload so no schema migration is
+    needed. Dismissive dispositions (``FALSE_POSITIVE``, ``ACCEPTED_RISK``) must
+    carry a note so the reasoning survives with the audit record.
+    """
+
     note: str | None = Field(default=None, max_length=2000)
+    disposition: AlertDispositionValue = "ADDRESSED"
+
+
+class SelfCheckCheck(BaseModel):
+    code: str
+    level: Literal["BLOCKING", "WARNING", "INFO", "OK"]
+    title: str
+    message: str
+    remediation: str | None = None
+    details: dict[str, Any] = Field(default_factory=dict)
+
+
+class SelfCheckOut(BaseModel):
+    application_id: uuid.UUID
+    reference_no: str
+    status: ApplicationStatus
+    check_version: str
+    generated_at: datetime
+    can_submit: bool
+    counts: dict[str, int]
+    checks: list[SelfCheckCheck]
+    advisory_note: str
 
 
 class AuditEventOut(ApiModel):

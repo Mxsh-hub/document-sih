@@ -94,12 +94,15 @@ async def security_middleware(request: Request, call_next):
     return response
 
 
-# Mount legacy routers
-app.include_router(upload.router, prefix=settings.API_V1_STR)
-app.include_router(digilocker.router, prefix=settings.API_V1_STR)
-app.include_router(issuer.router, prefix=settings.API_V1_STR)
-app.include_router(verify.router, prefix=settings.API_V1_STR)
-app.include_router(verifier.router, prefix=settings.API_V1_STR)
+# Legacy consumer-wallet routers are opt-in only. They are not part of the
+# compliance workflow, carry simulated/heuristic behaviour, and several were
+# mounted without authentication.
+if settings.LEGACY_API_ENABLED:
+    app.include_router(upload.router, prefix=settings.API_V1_STR)
+    app.include_router(digilocker.router, prefix=settings.API_V1_STR)
+    app.include_router(issuer.router, prefix=settings.API_V1_STR)
+    app.include_router(verify.router, prefix=settings.API_V1_STR)
+    app.include_router(verifier.router, prefix=settings.API_V1_STR)
 
 # Phase 3 routers
 app.include_router(auth.router, prefix=settings.API_V1_STR)

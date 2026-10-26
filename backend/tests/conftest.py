@@ -14,6 +14,11 @@ os.environ["JWT_SECRET"] = "test-secret-for-phase3-only-32-bytes-minimum"
 os.environ["DOWNLOAD_SIGNING_KEY"] = "test-download-key-for-phase3-32-bytes"
 os.environ["STORAGE_BACKEND"] = "local"
 os.environ["OBJECT_STORE_DIR"] = tempfile.mkdtemp(prefix="astra-test-objects-")
+# Keep tests hermetic: a developer's backend/.env may enable live anchoring
+# or mount the unauthenticated legacy consumer-wallet routers.
+os.environ["BLOCKCHAIN_ENABLED"] = "false"
+os.environ["BLOCKCHAIN_PROOF_ANCHORING_ENABLED"] = "false"
+os.environ["LEGACY_API_ENABLED"] = "false"
 os.environ.setdefault("SEED_PASSWORD", "ChangeMe123!")
 
 import psycopg
