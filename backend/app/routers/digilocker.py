@@ -139,14 +139,15 @@ async def import_digilocker_documents(
                 "id_number": doc.get("id_number")
             },
             "proof": {
-                "type": "Ed25519Signature2020",
+                "type": "AstraSimulatedProof",
                 "created": now_str,
                 "proofPurpose": "assertionMethod",
-                "verificationMethod": "did:gov:digilocker#key-1",
-                "proofValue": f"digilocker_sig_{uuid.uuid4().hex}"
+                "verificationMethod": "did:gov:digilocker#simulated",
+                "proofValue": f"simulated-{uuid.uuid4().hex}"
             },
-            "tier": "Gold",
-            "trust_level": "gold_cryptographic_signature"
+            "tier": "Demo",
+            "trust_level": "simulated_not_a_signature",
+            "simulated": True
         }
         imported_vcs.append(vc_dict)
         

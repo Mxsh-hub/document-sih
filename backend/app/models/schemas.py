@@ -33,7 +33,10 @@ class DigiLockerImportResponse(BaseModel):
 
 # W3C Verifiable Credentials Models
 class W3CProof(BaseModel):
-    type: str = "Ed25519Signature2020"
+    # No default: callers must state what the proof actually is. The legacy demo
+    # endpoints use AstraDemoHmacIntegrity / AstraSimulatedProof, the attestation
+    # helper uses AstraEd25519Signature. None of them is a W3C Data Integrity proof.
+    type: str
     created: str
     proofPurpose: str = "assertionMethod"
     verificationMethod: str

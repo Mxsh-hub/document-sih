@@ -1,0 +1,14 @@
+{
+  "name": "astraverify-circuits",
+  "private": true,
+  "version": "2.0.0",
+  "description": "Sound faculty eligibility threshold circuit and build tooling.",
+  "scripts": {
+    "build": "bash build_faculty_threshold.sh"
+  },
+  "devDependencies": {
+    "circom2": "^0.2.23",
+    "circomlib": "2.0.5",
+    "snarkjs": "0.7.6"
+  }
+}

@@ -3,3 +3,13 @@ venv/
 __pycache__/
 .env
 .env.*
+
+# Local document storage (uploads, signed artefacts) and test scratch dirs.
+backend/object_store/
+backend/evaluation/objects/
+backend/.pytest_cache/
+.pytest_cache/
+backend/test-*.xml
+
+!.env.example
+!**/.env.example

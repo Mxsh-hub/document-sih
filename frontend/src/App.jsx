@@ -5,6 +5,7 @@ import LandingPage from './components/LandingPage';
 import UserWallet from './components/UserWallet';
 import VerifierPortal from './components/VerifierPortal';
 import IssuerPortal from './components/IssuerPortal';
+import CompliancePortal from './components/CompliancePortal';
 
 function App() {
   return (
@@ -15,6 +16,7 @@ function App() {
           <Route path="wallet/*" element={<UserWallet />} />
           <Route path="verifier/*" element={<VerifierPortal />} />
           <Route path="issuer/*" element={<IssuerPortal />} />
+          <Route path="compliance" element={<CompliancePortal />} />
         </Route>
       </Routes>
     </BrowserRouter>

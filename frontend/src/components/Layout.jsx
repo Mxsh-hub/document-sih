@@ -1,6 +1,6 @@
 import React from 'react';
 import { Outlet, Link } from 'react-router-dom';
-import { ShieldCheck, User, Building, FileCheck } from 'lucide-react';
+import { ShieldCheck, User, Building, FileCheck, ClipboardCheck } from 'lucide-react';
 
 export default function Layout() {
   return (
@@ -22,6 +22,9 @@ export default function Layout() {
           </Link>
           <Link to="/issuer" className="flex items-center gap-2 font-bold px-4 py-2 border-2 border-border bg-accent text-accent-foreground hover:bg-accent/90 transition-colors">
             <Building size={18} /> Issuer
+          </Link>
+          <Link to="/compliance" className="flex items-center gap-2 font-bold px-4 py-2 border-2 border-border bg-primary text-primary-foreground hover:bg-primary/90 transition-colors">
+            <ClipboardCheck size={18} /> Compliance
           </Link>
         </div>
       </nav>

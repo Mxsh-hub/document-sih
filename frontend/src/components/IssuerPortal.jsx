@@ -56,21 +56,39 @@ export default function IssuerPortal() {
       
       // 2. Anchor on Blockchain (Ethers.js)
       try {
-        if (!window.ethereum) throw new Error("Please install MetaMask to issue credentials on the live network.");
+        if (!window.ethereum) throw new Error("Please install MetaMask to issue credentials.");
+        
+        // Auto-switch / Add Hardhat Localhost network (Chain ID: 31337 / 0x7a69)
+        try {
+          await window.ethereum.request({
+            method: 'wallet_switchEthereumChain',
+            params: [{ chainId: '0x7a69' }]
+          });
+        } catch (switchError) {
+          if (switchError.code === 4902 || switchError.message?.includes('Unrecognized')) {
+            await window.ethereum.request({
+              method: 'wallet_addEthereumChain',
+              params: [{
+                chainId: '0x7a69',
+                chainName: 'Hardhat Localhost',
+                rpcUrls: ['http://127.0.0.1:8545'],
+                nativeCurrency: { name: 'ETH', symbol: 'ETH', decimals: 18 }
+              }]
+            });
+          }
+        }
+
         await window.ethereum.request({ method: 'eth_requestAccounts' });
         const provider = new ethers.BrowserProvider(window.ethereum);
         const signer = await provider.getSigner();
         const contract = new ethers.Contract(contractAddress, contractABI, signer);
         
-        const tx = await contract.anchorDocument(docHash, "Gold", {
-            maxPriorityFeePerGas: ethers.parseUnits('40', 'gwei'),
-            maxFeePerGas: ethers.parseUnits('50', 'gwei')
-        });
+        const tx = await contract.anchorDocument(docHash, "Gold");
         await tx.wait();
         txHash = tx.hash;
       } catch (blockchainErr) {
         console.error("Blockchain anchoring failed:", blockchainErr);
-        throw new Error("Blockchain anchoring failed: " + blockchainErr.message);
+        throw new Error("Blockchain anchoring failed: " + (blockchainErr.reason || blockchainErr.message));
       }
 
       setIssueResult({
